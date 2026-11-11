@@ -1244,8 +1244,9 @@ END
   auto* sbt1 = script->GetPipelines()[0]->GetSBT("sbt1");
   ASSERT_TRUE(sbt1 != nullptr);
   ASSERT_EQ(1U, sbt1->GetSBTRecordCount());
-  const auto& addresses =
-      sbt1->GetSBTRecords()[0]->GetAccelerationStructureAddresses();
+  auto* record = sbt1->GetSBTRecords()[0]->GetShaderRecordBuffer();
+  ASSERT_EQ(script->GetBuffer("record1"), record);
+  const auto& addresses = record->GetAccelerationStructureAddresses();
   ASSERT_EQ(2U, addresses.size());
   EXPECT_EQ(script->GetTLAS("tlas"), addresses[0].tlas);
   EXPECT_EQ(4U, addresses[0].offset);
@@ -1282,9 +1283,7 @@ END
   Parser parser;
   Result r = parser.Parse(in);
   ASSERT_FALSE(r.IsSuccess());
-  EXPECT_EQ(
-      "20: unknown top level acceleration structure for SHADER_RECORD: missing",
-      r.Error());
+  EXPECT_EQ("20: unknown top level acceleration structure: missing", r.Error());
 }
 
 TEST_F(AmberScriptParserTest,
@@ -1349,8 +1348,217 @@ END
   Result r = parser.Parse(in);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ(
-      "20: acceleration structure address at OFFSET 16 does not fit in the "
-      "shader record",
+      "20: acceleration structure address at OFFSET 16 does not fit in "
+      "buffer record1",
+      r.Error());
+}
+
+TEST_F(AmberScriptParserTest, AccelerationStructureAddress) {
+  std::string in = R"(
+BUFFER push DATA_TYPE uint32 DATA 1 2 3 4 END
+ACCELERATION_STRUCTURE BOTTOM_LEVEL blas
+  GEOMETRY TRIANGLES
+    0 0 0  0 1 0  1 0 0
+  END
+END
+ACCELERATION_STRUCTURE TOP_LEVEL tlas
+  BOTTOM_LEVEL_INSTANCE blas
+  END
+END
+ACCELERATION_STRUCTURE ADDRESS tlas BUFFER push OFFSET 0
+ACCELERATION_STRUCTURE ADDRESS tlas BUFFER push OFFSET 8
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+
+  auto script = parser.GetScript();
+  auto* push = script->GetBuffer("push");
+  ASSERT_TRUE(push != nullptr);
+  const auto& addresses = push->GetAccelerationStructureAddresses();
+  ASSERT_EQ(2U, addresses.size());
+  EXPECT_EQ(script->GetTLAS("tlas"), addresses[0].tlas);
+  EXPECT_EQ(0U, addresses[0].offset);
+  EXPECT_EQ(script->GetTLAS("tlas"), addresses[1].tlas);
+  EXPECT_EQ(8U, addresses[1].offset);
+}
+
+TEST_F(AmberScriptParserTest, AccelerationStructureAddressUnknownTLAS) {
+  std::string in = R"(
+BUFFER push DATA_TYPE uint32 DATA 1 2 3 4 END
+ACCELERATION_STRUCTURE BOTTOM_LEVEL blas
+  GEOMETRY TRIANGLES
+    0 0 0  0 1 0  1 0 0
+  END
+END
+ACCELERATION_STRUCTURE TOP_LEVEL tlas
+  BOTTOM_LEVEL_INSTANCE blas
+  END
+END
+ACCELERATION_STRUCTURE ADDRESS missing BUFFER push OFFSET 0
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ("12: unknown top level acceleration structure: missing", r.Error());
+}
+
+TEST_F(AmberScriptParserTest, AccelerationStructureAddressMissingTLAS) {
+  std::string in = R"(
+BUFFER push DATA_TYPE uint32 DATA 1 2 3 4 END
+ACCELERATION_STRUCTURE BOTTOM_LEVEL blas
+  GEOMETRY TRIANGLES
+    0 0 0  0 1 0  1 0 0
+  END
+END
+ACCELERATION_STRUCTURE TOP_LEVEL tlas
+  BOTTOM_LEVEL_INSTANCE blas
+  END
+END
+ACCELERATION_STRUCTURE ADDRESS
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ(
+      "13: ACCELERATION_STRUCTURE requires a top level acceleration structure "
+      "name",
+      r.Error());
+}
+
+TEST_F(AmberScriptParserTest, AccelerationStructureAddressNoBuffer) {
+  std::string in = R"(
+BUFFER push DATA_TYPE uint32 DATA 1 2 3 4 END
+ACCELERATION_STRUCTURE BOTTOM_LEVEL blas
+  GEOMETRY TRIANGLES
+    0 0 0  0 1 0  1 0 0
+  END
+END
+ACCELERATION_STRUCTURE TOP_LEVEL tlas
+  BOTTOM_LEVEL_INSTANCE blas
+  END
+END
+ACCELERATION_STRUCTURE ADDRESS tlas OFFSET 0
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ("12: ACCELERATION_STRUCTURE ADDRESS requires BUFFER", r.Error());
+}
+
+TEST_F(AmberScriptParserTest, AccelerationStructureAddressUnknownBuffer) {
+  std::string in = R"(
+BUFFER push DATA_TYPE uint32 DATA 1 2 3 4 END
+ACCELERATION_STRUCTURE BOTTOM_LEVEL blas
+  GEOMETRY TRIANGLES
+    0 0 0  0 1 0  1 0 0
+  END
+END
+ACCELERATION_STRUCTURE TOP_LEVEL tlas
+  BOTTOM_LEVEL_INSTANCE blas
+  END
+END
+ACCELERATION_STRUCTURE ADDRESS tlas BUFFER missing OFFSET 0
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ("12: unknown buffer for ACCELERATION_STRUCTURE ADDRESS: missing",
+            r.Error());
+}
+
+TEST_F(AmberScriptParserTest, AccelerationStructureAddressNoOffset) {
+  std::string in = R"(
+BUFFER push DATA_TYPE uint32 DATA 1 2 3 4 END
+ACCELERATION_STRUCTURE BOTTOM_LEVEL blas
+  GEOMETRY TRIANGLES
+    0 0 0  0 1 0  1 0 0
+  END
+END
+ACCELERATION_STRUCTURE TOP_LEVEL tlas
+  BOTTOM_LEVEL_INSTANCE blas
+  END
+END
+ACCELERATION_STRUCTURE ADDRESS tlas BUFFER push 0
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ("12: ACCELERATION_STRUCTURE requires OFFSET", r.Error());
+}
+
+TEST_F(AmberScriptParserTest, AccelerationStructureAddressBadOffset) {
+  std::string in = R"(
+BUFFER push DATA_TYPE uint32 DATA 1 2 3 4 END
+ACCELERATION_STRUCTURE BOTTOM_LEVEL blas
+  GEOMETRY TRIANGLES
+    0 0 0  0 1 0  1 0 0
+  END
+END
+ACCELERATION_STRUCTURE TOP_LEVEL tlas
+  BOTTOM_LEVEL_INSTANCE blas
+  END
+END
+ACCELERATION_STRUCTURE ADDRESS tlas BUFFER push OFFSET x
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ("12: OFFSET expects an integer", r.Error());
+}
+
+TEST_F(AmberScriptParserTest, AccelerationStructureAddressOutside) {
+  std::string in = R"(
+BUFFER push DATA_TYPE uint32 DATA 1 2 3 4 END
+ACCELERATION_STRUCTURE BOTTOM_LEVEL blas
+  GEOMETRY TRIANGLES
+    0 0 0  0 1 0  1 0 0
+  END
+END
+ACCELERATION_STRUCTURE TOP_LEVEL tlas
+  BOTTOM_LEVEL_INSTANCE blas
+  END
+END
+ACCELERATION_STRUCTURE ADDRESS tlas BUFFER push OFFSET 12
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ(
+      "12: acceleration structure address at OFFSET 12 does not fit in buffer "
+      "push",
+      r.Error());
+}
+
+TEST_F(AmberScriptParserTest, AccelerationStructureAddressExtraParameters) {
+  std::string in = R"(
+BUFFER push DATA_TYPE uint32 DATA 1 2 3 4 END
+ACCELERATION_STRUCTURE BOTTOM_LEVEL blas
+  GEOMETRY TRIANGLES
+    0 0 0  0 1 0  1 0 0
+  END
+END
+ACCELERATION_STRUCTURE TOP_LEVEL tlas
+  BOTTOM_LEVEL_INSTANCE blas
+  END
+END
+ACCELERATION_STRUCTURE ADDRESS tlas BUFFER push OFFSET 0 extra
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ(
+      "12: extra parameters after ACCELERATION_STRUCTURE ADDRESS command: "
+      "extra",
       r.Error());
 }
 

@@ -568,6 +568,26 @@ If |flags| is a space-separated list it should not be ended with END statement.
 The |transform| is 12 space-separated values describing a 3x4 row-major affine transformation matrix applied to
 the acceleration structure.
 
+#### Acceleration structure addresses
+
+Shaders can turn a 64-bit device address into an acceleration structure with
+`accelerationStructureEXT(...)` (`OpConvertUToAccelerationStructureKHR`). The
+address of a top level acceleration structure can be put into the data of any
+buffer:
+
+```groovy
+  ACCELERATION_STRUCTURE ADDRESS {name_of_top_level_acceleration_structure} \
+      BUFFER {buffer_name} OFFSET {offset}
+```
+
+Before a pipeline uses the buffer |buffer_name| (as a uniform or storage
+buffer, as push constants or as shader record data) the 8 bytes at byte
+|offset| of its data are overwritten with the device address of the top level
+acceleration structure, which is created at that point if needed and built
+before the pipeline runs. The command must follow the declarations of both the
+buffer and the acceleration structure, and |offset| + 8 must not exceed the
+size of the buffer. A buffer can hold any number of addresses.
+
 
 ### Pipelines
 
@@ -673,12 +693,13 @@ read them through a `shaderRecordEXT` buffer block. All records of a shader
 binding table share one stride, the group handle size plus the largest record
 data, aligned to `shaderGroupHandleAlignment`.
 
-Each `ACCELERATION_STRUCTURE` overwrites 8 bytes of the record data at byte
-|offset| with the device address of the top level acceleration structure
-|tlas_name|, which is built before the rays are traced. Shaders turn such an
-address into an acceleration structure with `accelerationStructureEXT(...)`
-(`OpConvertUToAccelerationStructureKHR`); any other value there is not a valid
-acceleration structure.
+`ACCELERATION_STRUCTURE {tlas_name} OFFSET {offset}` after `SHADER_RECORD` is
+a shorthand for `ACCELERATION_STRUCTURE ADDRESS {tlas_name} BUFFER
+{buffer_name} OFFSET {offset}` (see [Acceleration structure
+addresses](#acceleration-structure-addresses)): the 8 bytes of the record data
+at byte |offset| hold the device address of the top level acceleration
+structure |tlas_name|, which is built before the rays are traced. As the
+address belongs to the buffer, every use of the buffer carries it.
 
 Generally a program needs three shader binding tables:
  * ray generation shader binding table with one ray generation shader group

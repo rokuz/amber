@@ -4609,11 +4609,77 @@ Result Parser::ParseAS() {
     r = ParseBLAS();
   } else if (type == "TOP_LEVEL") {
     r = ParseTLAS();
+  } else if (type == "ADDRESS") {
+    r = ParseASAddress();
   } else {
     return Result("Unexpected acceleration structure type");
   }
 
   return r;
+}
+
+Result Parser::ParseASAddress() {
+  TLAS* tlas = nullptr;
+  Result r = ParseAddressTLAS(&tlas);
+  if (!r.IsSuccess()) {
+    return r;
+  }
+
+  auto token = tokenizer_->NextToken();
+  if (!token->IsIdentifier() || token->AsString() != "BUFFER") {
+    return Result("ACCELERATION_STRUCTURE ADDRESS requires BUFFER");
+  }
+  token = tokenizer_->NextToken();
+  if (!token->IsIdentifier()) {
+    return Result("BUFFER requires a buffer name");
+  }
+  Buffer* buffer = script_->GetBuffer(token->AsString());
+  if (buffer == nullptr) {
+    return Result("unknown buffer for ACCELERATION_STRUCTURE ADDRESS: " +
+                  token->AsString());
+  }
+
+  r = ParseAddressOffset(tlas, buffer);
+  if (!r.IsSuccess()) {
+    return r;
+  }
+
+  return ValidateEndOfStatement("ACCELERATION_STRUCTURE ADDRESS command");
+}
+
+Result Parser::ParseAddressTLAS(TLAS** tlas) {
+  auto token = tokenizer_->NextToken();
+  if (!token->IsIdentifier()) {
+    return Result(
+        "ACCELERATION_STRUCTURE requires a top level acceleration structure "
+        "name");
+  }
+  *tlas = script_->GetTLAS(token->AsString());
+  if (*tlas == nullptr) {
+    return Result("unknown top level acceleration structure: " +
+                  token->AsString());
+  }
+  return {};
+}
+
+Result Parser::ParseAddressOffset(TLAS* tlas, Buffer* buffer) {
+  auto token = tokenizer_->NextToken();
+  if (!token->IsIdentifier() || token->AsString() != "OFFSET") {
+    return Result("ACCELERATION_STRUCTURE requires OFFSET");
+  }
+  token = tokenizer_->NextToken();
+  if (!token->IsInteger()) {
+    return Result("OFFSET expects an integer");
+  }
+  const uint32_t offset = token->AsUint32();
+  if (static_cast<uint64_t>(offset) + sizeof(uint64_t) >
+      buffer->GetSizeInBytes()) {
+    return Result("acceleration structure address at OFFSET " +
+                  std::to_string(offset) + " does not fit in buffer " +
+                  buffer->GetName());
+  }
+  buffer->AddAccelerationStructureAddress(tlas, offset);
+  return {};
 }
 
 Result Parser::ParseBLAS() {
@@ -5159,35 +5225,15 @@ Result Parser::ParseSBT(Pipeline* pipeline) {
         }
         tokenizer_->NextToken();
 
-        token = tokenizer_->NextToken();
-        if (!token->IsIdentifier()) {
-          return Result(
-              "ACCELERATION_STRUCTURE requires a top level acceleration "
-              "structure name");
+        TLAS* tlas = nullptr;
+        Result r = ParseAddressTLAS(&tlas);
+        if (!r.IsSuccess()) {
+          return r;
         }
-        TLAS* tlas = script_->GetTLAS(token->AsString());
-        if (tlas == nullptr) {
-          return Result(
-              "unknown top level acceleration structure for SHADER_RECORD: " +
-              token->AsString());
+        r = ParseAddressOffset(tlas, buffer);
+        if (!r.IsSuccess()) {
+          return r;
         }
-
-        token = tokenizer_->NextToken();
-        if (!token->IsIdentifier() || token->AsString() != "OFFSET") {
-          return Result("ACCELERATION_STRUCTURE requires OFFSET");
-        }
-        token = tokenizer_->NextToken();
-        if (!token->IsInteger()) {
-          return Result("OFFSET expects an integer");
-        }
-        const uint32_t offset = token->AsUint32();
-        if (static_cast<uint64_t>(offset) + sizeof(uint64_t) >
-            buffer->GetSizeInBytes()) {
-          return Result("acceleration structure address at OFFSET " +
-                        std::to_string(offset) +
-                        " does not fit in the shader record");
-        }
-        sbtrecord->AddAccelerationStructureAddress(tlas, offset);
       }
     }
 

@@ -130,7 +130,7 @@ Result RayTracingPipeline::getVulkanSBTRegion(
 
       vSBT = sbt_vulkan.first->second;
 
-      Result r = vSBT->Create(aSBT, pipeline, tlases_);
+      Result r = vSBT->Create(aSBT, pipeline);
       if (!r.IsSuccess()) {
         return r;
       }
@@ -147,22 +147,16 @@ Result RayTracingPipeline::getVulkanSBTRegion(
   return {};
 }
 
-Result RayTracingPipeline::CreateShaderRecordTLASes(amber::SBT* aSBT) {
+Result RayTracingPipeline::WriteShaderRecordAddresses(amber::SBT* aSBT) {
   if (aSBT == nullptr) {
     return {};
   }
 
   for (auto& record : aSBT->GetSBTRecords()) {
-    for (const auto& address : record->GetAccelerationStructureAddresses()) {
-      if (tlases_->find(address.tlas) != tlases_->end()) {
-        continue;
-      }
-      auto& vulkan_tlas =
-          ((*tlases_)[address.tlas] = std::make_unique<TLAS>(device_));
-      Result r = vulkan_tlas->CreateTLAS(address.tlas, blases_);
-      if (!r.IsSuccess()) {
-        return r;
-      }
+    Result r =
+        WriteAccelerationStructureAddresses(record->GetShaderRecordBuffer());
+    if (!r.IsSuccess()) {
+      return r;
     }
   }
 
@@ -208,7 +202,7 @@ Result RayTracingPipeline::TraceRays(amber::SBT* rSBT,
   }
 
   for (amber::SBT* sbt : {rSBT, mSBT, hSBT, cSBT}) {
-    r = CreateShaderRecordTLASes(sbt);
+    r = WriteShaderRecordAddresses(sbt);
     if (!r.IsSuccess()) {
       return r;
     }

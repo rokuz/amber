@@ -30,6 +30,7 @@
 namespace amber {
 
 class Sampler;
+class TLAS;
 
 /// Types of buffers which can be created.
 enum class BufferType : int8_t {
@@ -221,6 +222,24 @@ class Buffer {
   /// Returns the number of samples.
   uint32_t GetSamples() const { return samples_; }
 
+  /// The device address of |tlas| is written into the buffer data at byte
+  /// |offset| before the buffer is used by a pipeline.
+  struct AccelerationStructureAddress {
+    TLAS* tlas = nullptr;
+    uint32_t offset = 0;
+  };
+
+  /// Adds the device address of |tlas| at byte |offset| of the buffer data.
+  void AddAccelerationStructureAddress(TLAS* tlas, uint32_t offset) {
+    acceleration_structure_addresses_.push_back({tlas, offset});
+  }
+
+  /// Returns the acceleration structure addresses written into the buffer.
+  const std::vector<AccelerationStructureAddress>&
+  GetAccelerationStructureAddresses() const {
+    return acceleration_structure_addresses_;
+  }
+
   /// Returns a pointer to the internal storage of the buffer.
   std::vector<uint8_t>* ValuePtr() { return &bytes_; }
   /// Returns a pointer to the internal storage of the buffer.
@@ -278,6 +297,7 @@ class Buffer {
   Format* format_ = nullptr;
   Sampler* sampler_ = nullptr;
   ImageDimension image_dim_ = ImageDimension::kUnknown;
+  std::vector<AccelerationStructureAddress> acceleration_structure_addresses_;
 };
 
 }  // namespace amber

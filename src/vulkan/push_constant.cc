@@ -106,7 +106,15 @@ Result PushConstant::RecordPushConstantVkCommand(
   return {};
 }
 
-Result PushConstant::AddBuffer(const Buffer* buffer, uint32_t offset) {
+std::vector<Buffer*> PushConstant::GetBuffers() const {
+  std::vector<Buffer*> buffers;
+  for (const auto& data : push_constant_data_) {
+    buffers.push_back(data.buffer);
+  }
+  return buffers;
+}
+
+Result PushConstant::AddBuffer(Buffer* buffer, uint32_t offset) {
   push_constant_data_.emplace_back();
   push_constant_data_.back().offset = offset;
   push_constant_data_.back().buffer = buffer;

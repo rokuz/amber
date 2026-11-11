@@ -100,6 +100,9 @@ class Parser : public amber::Parser {
   Result ParseSampler();
   bool IsRayTracingShader(ShaderType type);
   Result ParseAS();
+  Result ParseASAddress();
+  Result ParseAddressTLAS(TLAS** tlas);
+  Result ParseAddressOffset(TLAS* tlas, Buffer* buffer);
   Result ParseBLAS();
   Result ParseBLASTriangle(BLAS* blas);
   Result ParseBLASAABB(BLAS* blas);

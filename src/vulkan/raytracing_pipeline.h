@@ -71,7 +71,7 @@ class RayTracingPipeline : public Pipeline {
   TlasesMap* GetTlases() override { return tlases_; }
 
  private:
-  Result CreateShaderRecordTLASes(amber::SBT* aSBT);
+  Result WriteShaderRecordAddresses(amber::SBT* aSBT);
   Result CreateVkRayTracingPipeline(const VkPipelineLayout& pipeline_layout,
                                     VkPipeline* pipeline,
                                     const std::vector<VkPipeline>& libs,

@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <limits>
 #include <utility>
 
@@ -29,6 +30,7 @@
 #include "src/vulkan/image_descriptor.h"
 #include "src/vulkan/raytracing_pipeline.h"
 #include "src/vulkan/sampler_descriptor.h"
+#include "src/vulkan/tlas.h"
 #include "src/vulkan/tlas_descriptor.h"
 
 namespace amber {
@@ -353,7 +355,7 @@ Result Pipeline::RecordPushConstant(const VkPipelineLayout& pipeline_layout) {
                                                      pipeline_layout);
 }
 
-Result Pipeline::AddPushConstantBuffer(const Buffer* buf, uint32_t offset) {
+Result Pipeline::AddPushConstantBuffer(Buffer* buf, uint32_t offset) {
   if (!buf) {
     return Result("Missing push constant buffer data");
   }
@@ -566,7 +568,61 @@ Result Pipeline::AddTLASDescriptor(const TLASCommand* cmd) {
   return {};
 }
 
+Result Pipeline::WriteAccelerationStructureAddresses(Buffer* buffer) {
+  if (buffer == nullptr ||
+      buffer->GetAccelerationStructureAddresses().empty()) {
+    return {};
+  }
+
+  TlasesMap* tlases = GetTlases();
+  BlasesMap* blases = GetBlases();
+  if (tlases == nullptr || blases == nullptr) {
+    return Result(
+        "Vulkan: acceleration structure addresses are not supported by this "
+        "pipeline");
+  }
+
+  for (const auto& address : buffer->GetAccelerationStructureAddresses()) {
+    auto vulkan_tlas = tlases->find(address.tlas);
+    if (vulkan_tlas == tlases->end()) {
+      auto created =
+          tlases->emplace(address.tlas, std::make_unique<TLAS>(device_));
+      vulkan_tlas = created.first;
+      Result r = vulkan_tlas->second->CreateTLAS(address.tlas, blases);
+      if (!r.IsSuccess()) {
+        return r;
+      }
+    }
+
+    auto* bytes = buffer->ValuePtr();
+    if (static_cast<uint64_t>(address.offset) + sizeof(uint64_t) >
+        bytes->size()) {
+      return Result("Vulkan: acceleration structure address at offset " +
+                    std::to_string(address.offset) +
+                    " does not fit in buffer " + buffer->GetName());
+    }
+    const uint64_t value =
+        static_cast<uint64_t>(vulkan_tlas->second->GetVkTLASDeviceAddress());
+    std::memcpy(bytes->data() + address.offset, &value, sizeof(value));
+  }
+
+  return {};
+}
+
 Result Pipeline::SendDescriptorDataToDeviceIfNeeded() {
+  for (Buffer* buffer : descriptor_buffers_) {
+    Result r = WriteAccelerationStructureAddresses(buffer);
+    if (!r.IsSuccess()) {
+      return r;
+    }
+  }
+  for (Buffer* buffer : push_constant_->GetBuffers()) {
+    Result r = WriteAccelerationStructureAddresses(buffer);
+    if (!r.IsSuccess()) {
+      return r;
+    }
+  }
+
   {
     CommandBufferGuard guard(GetCommandBuffer());
     if (!guard.IsRecording()) {

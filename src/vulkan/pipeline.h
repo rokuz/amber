@@ -61,7 +61,7 @@ class Pipeline {
   Result AddTLASDescriptor(const TLASCommand*);
 
   /// Add |buffer| data to the push constants at |offset|.
-  Result AddPushConstantBuffer(const Buffer* buf, uint32_t offset);
+  Result AddPushConstantBuffer(Buffer* buf, uint32_t offset);
 
   /// Reads back the contents of resources of all descriptors to a
   /// buffer data object and put it into buffer data queue in host.
@@ -109,6 +109,10 @@ class Pipeline {
   void EndTimerQuery();
 
   Result SendDescriptorDataToDeviceIfNeeded();
+
+  /// Writes the device addresses of top level acceleration structures into
+  /// the data of |buffer|, creating the acceleration structures if needed.
+  Result WriteAccelerationStructureAddresses(Buffer* buffer);
   void BindVkDescriptorSets(const VkPipelineLayout& pipeline_layout);
 
   /// Records a Vulkan command for push contant.

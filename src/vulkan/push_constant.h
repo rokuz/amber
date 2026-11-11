@@ -44,7 +44,10 @@ class PushConstant {
   /// Add a set of values from the given |buffer| to the push constants
   /// to be used on the next pipeline execution. The data will be added to
   /// the push constants at |offset|.
-  Result AddBuffer(const Buffer* buffer, uint32_t offset);
+  Result AddBuffer(Buffer* buffer, uint32_t offset);
+
+  /// Returns the buffers whose data fill the push constants.
+  std::vector<Buffer*> GetBuffers() const;
 
   /// Adds data into the push constant buffer.
   Result AddBufferData(const BufferCommand* command);
@@ -54,7 +57,7 @@ class PushConstant {
   // be copied into the result buffer at |offset|.
   struct BufferInput {
     uint32_t offset = 0;
-    const Buffer* buffer = nullptr;
+    Buffer* buffer = nullptr;
   };
 
   Result UpdateMemoryWithInput(const BufferInput& input);
