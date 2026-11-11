@@ -599,6 +599,16 @@ bool AreAllValidationExtensionsSupported() {
   return false;
 }
 
+std::string ToLowerAscii(const std::string& text) {
+  std::string lower = text;
+  for (char& c : lower) {
+    if (c >= 'A' && c <= 'Z') {
+      c = static_cast<char>(c - 'A' + 'a');
+    }
+  }
+  return lower;
+}
+
 // Check if |physical_device| supports all required features given
 // in |required_features|.
 bool AreAllRequiredFeaturesSupported(
@@ -1431,7 +1441,8 @@ amber::Result ConfigHelperVulkan::CheckVulkanPhysicalDeviceRequirements(
 amber::Result ConfigHelperVulkan::ChooseVulkanPhysicalDevice(
     const std::vector<std::string>& required_features,
     const std::vector<std::string>& required_extensions,
-    const int32_t selected_device) {
+    const int32_t selected_device,
+    const std::string& selected_device_name) {
   uint32_t count = 0;
   std::vector<VkPhysicalDevice> physical_devices;
 
@@ -1443,6 +1454,43 @@ amber::Result ConfigHelperVulkan::ChooseVulkanPhysicalDevice(
   if (vkEnumeratePhysicalDevices(vk_.instance, &count,
                                  physical_devices.data()) != VK_SUCCESS) {
     return amber::Result("Unable to enumerate physical devices");
+  }
+
+  if (!selected_device_name.empty()) {
+    const std::string wanted = ToLowerAscii(selected_device_name);
+    std::vector<std::string> names;
+    bool matched = false;
+    amber::Result first_failure;
+    for (uint32_t i = 0; i < count; ++i) {
+      VkPhysicalDeviceProperties properties = {};
+      vkGetPhysicalDeviceProperties(physical_devices[i], &properties);
+      const std::string name = properties.deviceName;
+      names.push_back(name);
+      if (ToLowerAscii(name).find(wanted) == std::string::npos) {
+        continue;
+      }
+      amber::Result r = CheckVulkanPhysicalDeviceRequirements(
+          physical_devices[i], required_features, required_extensions);
+      if (!r.IsSuccess()) {
+        if (!matched) {
+          first_failure = r;
+        }
+        matched = true;
+        continue;
+      }
+      vk_.physical_device = physical_devices[i];
+      return {};
+    }
+    if (matched) {
+      return first_failure;
+    }
+    std::ostringstream out;
+    out << "No Vulkan device name contains \"" << selected_device_name
+        << "\"; available devices:";
+    for (uint32_t i = 0; i < names.size(); ++i) {
+      out << std::endl << "  " << i << ": " << names[i];
+    }
+    return amber::Result(out.str());
   }
 
   if (selected_device > -1) {
@@ -1887,6 +1935,7 @@ amber::Result ConfigHelperVulkan::CreateConfig(
     uint32_t engine_major,
     uint32_t engine_minor,
     int32_t selected_device,
+    const std::string& selected_device_name,
     const std::vector<std::string>& required_features,
     const std::vector<std::string>& required_instance_extensions,
     const std::vector<std::string>& required_device_extensions,
@@ -1909,7 +1958,7 @@ amber::Result ConfigHelperVulkan::CreateConfig(
   }
 
   r = ChooseVulkanPhysicalDevice(required_features, required_device_extensions,
-                                 selected_device);
+                                 selected_device, selected_device_name);
   if (!r.IsSuccess()) {
     return r;
   }

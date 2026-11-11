@@ -368,6 +368,17 @@ encountered should be displayed on the console.
 
 Run `out/Debug/amber -h` to see a description of the program's command line options.
 
+On a machine with several Vulkan devices, Amber runs on the first one that
+supports the script's requirements. Pick another with `-D <ID>` (the index in
+`vkEnumeratePhysicalDevices` order) or `--device-name <substring>` (the first
+device whose `deviceName` contains the substring, ignoring ASCII case; if none
+matches, Amber lists the available devices and exits with an error). Both apply
+to `-V` as well, which prints the selected device's properties:
+
+```
+out/Debug/amber -V --device-name nvidia
+```
+
 Example AmberScript files can be found in the [tests/cases](tests/cases)
 directory in this repository.
 Also the [Vulkan Conformance Test

@@ -39,6 +39,7 @@ amber::Result ConfigHelper::CreateConfig(
     uint32_t engine_major,
     uint32_t engine_minor,
     int32_t selected_device,
+    const std::string& selected_device_name,
     const std::vector<std::string>& required_features,
     const std::vector<std::string>& required_instance_extensions,
     const std::vector<std::string>& required_device_extensions,
@@ -68,10 +69,10 @@ amber::Result ConfigHelper::CreateConfig(
   }
 
   return impl_->CreateConfig(
-      engine_major, engine_minor, selected_device, required_features,
-      required_instance_extensions, required_device_extensions,
-      disable_validation_layer, enable_pipeline_runtime_layer,
-      show_version_info, config);
+      engine_major, engine_minor, selected_device, selected_device_name,
+      required_features, required_instance_extensions,
+      required_device_extensions, disable_validation_layer,
+      enable_pipeline_runtime_layer, show_version_info, config);
 }
 
 }  // namespace sample

@@ -58,6 +58,7 @@ struct Options {
   uint32_t engine_minor = 1;
   int32_t fence_timeout = -1;
   int32_t selected_device = -1;
+  std::string selected_device_name;
   bool parse_only = false;
   bool pipeline_create_only = false;
   bool disable_validation_layer = false;
@@ -83,6 +84,10 @@ const char kUsage[] = R"(Usage: amber [options] SCRIPT [SCRIPTS...]
   -q                        -- Disable summary output.
   -d                        -- Disable validation layers.
   -D <ID>                   -- ID of device to run with (Vulkan only).
+  --device-name <substring> -- Run with the first device whose name contains |substring|,
+                               ignoring ASCII case, and that supports the script's
+                               requirements (Vulkan only). Lists the available devices if
+                               no name matches. Cannot be combined with -D.
   -f <value>                -- Sets the fence timeout value to |value|
   -t <spirv_env>            -- The target SPIR-V environment e.g., spv1.3, vulkan1.1, vulkan1.2.
                                If a SPIR-V environment, assume the lowest version of Vulkan that
@@ -100,7 +105,8 @@ const char kUsage[] = R"(Usage: amber [options] SCRIPT [SCRIPTS...]
   -w <filename>             -- Write shader assembly to |filename|
   -e <engine>               -- Specify graphics engine: vulkan, dawn. Default is vulkan.
   -v <engine version>       -- Engine version (eg, 1.1 for Vulkan). Default 1.0.
-  -V, --version             -- Output version information for Amber and libraries.
+  -V, --version             -- Output version information for Amber and libraries, and the
+                               properties of the selected device (honours -D and --device-name).
   --log-graphics-calls      -- Log graphics API calls (only for Vulkan so far).
   --log-graphics-calls-time -- Log timing of graphics API calls timing (Vulkan only).
   --log-execute-calls       -- Log each execute call before run.
@@ -210,6 +216,18 @@ bool ParseArgs(const std::vector<std::string>& args, Options* opts) {
       }
       opts->selected_device = val;
 
+    } else if (arg == "--device-name") {
+      ++i;
+      if (i >= args.size()) {
+        std::cerr << "Missing value for --device-name argument." << std::endl;
+        return false;
+      }
+      if (args[i].empty()) {
+        std::cerr << "Device name must be non-empty" << std::endl;
+        return false;
+      }
+      opts->selected_device_name = args[i];
+
     } else if (arg == "-f") {
       ++i;
       if (i >= args.size()) {
@@ -294,6 +312,11 @@ bool ParseArgs(const std::vector<std::string>& args, Options* opts) {
     } else if (!arg.empty()) {
       opts->input_filenames.push_back(arg);
     }
+  }
+
+  if (opts->selected_device > -1 && !opts->selected_device_name.empty()) {
+    std::cerr << "-D and --device-name cannot be combined." << std::endl;
+    return false;
   }
 
   return true;
@@ -598,7 +621,7 @@ int main(int argc, const char** argv) {
 
   amber::Result r = config_helper.CreateConfig(
       amber_options.engine, options.engine_major, options.engine_minor,
-      options.selected_device,
+      options.selected_device, options.selected_device_name,
       std::vector<std::string>(required_features.begin(),
                                required_features.end()),
       std::vector<std::string>(required_instance_extensions.begin(),
