@@ -33,6 +33,46 @@ TEST_F(AmberScriptParserTest, Set) {
   EXPECT_EQ(125U, data.fence_timeout_ms);
 }
 
+TEST_F(AmberScriptParserTest, SetDeviceLostProbe) {
+  std::string in = "SET ENGINE_DATA device_lost_probe_ms 25";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+
+  auto script = parser.GetScript();
+  auto& data = script->GetEngineData();
+
+  EXPECT_EQ(25U, data.device_lost_probe_ms);
+}
+
+TEST_F(AmberScriptParserTest, SetDeviceLostProbeDefault) {
+  Parser parser;
+  Result r = parser.Parse("#!amber");
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+
+  EXPECT_EQ(10U, parser.GetScript()->GetEngineData().device_lost_probe_ms);
+}
+
+TEST_F(AmberScriptParserTest, SetDeviceLostProbeMissingValue) {
+  std::string in = "SET ENGINE_DATA device_lost_probe_ms";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ("1: SET missing value for device_lost_probe_ms", r.Error());
+}
+
+TEST_F(AmberScriptParserTest, SetDeviceLostProbeInvalidValue) {
+  std::string in = "SET ENGINE_DATA device_lost_probe_ms INVALID";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ("1: SET invalid value for device_lost_probe_ms, must be uint32",
+            r.Error());
+}
+
 TEST_F(AmberScriptParserTest, SetMissingEngineData) {
   std::string in = "SET fence_timeout_ms 125";
 

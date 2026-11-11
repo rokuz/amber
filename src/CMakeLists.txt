@@ -189,6 +189,7 @@ if (${AMBER_ENABLE_TESTS})
 
   if (${Vulkan_FOUND})
     list(APPEND TEST_SRCS
+            vulkan/device_status_test.cc
             vulkan/vertex_buffer_test.cc
             vulkan/pipeline_test.cc)
   endif()

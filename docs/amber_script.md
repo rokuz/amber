@@ -144,6 +144,13 @@ set of data types.
 
 #### Engine Data Variables
   * `fence_timeout_ms`  - value must be a single uint32 in milliseconds.
+  * `device_lost_probe_ms`  - value must be a single uint32 in milliseconds,
+    10 by default. After every `RUN` the Vulkan engine waits for the queue and
+    the device to become idle and then submits empty command buffers, each
+    with its own fence, until this much time has passed. A device loss that a
+    driver reports only after the `RUN`'s own fence has signalled fails the
+    `RUN` with `device lost after RUN`, before any `EXPECT` or buffer dump
+    reads its results. With 0 the engine waits for idle and probes once.
 
 ```groovy
 SET ENGINE_DATA {engine data variable} {value}*

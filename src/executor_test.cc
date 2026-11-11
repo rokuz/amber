@@ -187,6 +187,17 @@ class EngineStub : public Engine {
     return Result("draw mesh tasks stub not implemented");
   }
 
+  void LoseDevice() { device_lost_ = true; }
+  uint32_t GetDeviceStatusChecks() const { return device_status_checks_; }
+  Result CheckDeviceStatus() override {
+    ++device_status_checks_;
+
+    if (device_lost_) {
+      return Result("Vulkan::Calling vkQueueWaitIdle Fail (DEVICE_LOST)");
+    }
+    return {};
+  }
+
  private:
   bool fail_clear_command_ = false;
   bool fail_clear_color_command_ = false;
@@ -211,6 +222,9 @@ class EngineStub : public Engine {
   bool did_entry_point_command_ = false;
   bool did_patch_command_ = false;
   bool did_buffer_command_ = false;
+
+  bool device_lost_ = false;
+  uint32_t device_status_checks_ = 0;
 
   std::vector<std::string> features_;
   std::vector<std::string> properties_;
@@ -620,6 +634,76 @@ draw rect 2 4 10 20)";
   EXPECT_EQ("draw rect command failed", r.Error());
 }
 
+TEST_F(VkScriptExecutorTest, DrawRectCommandChecksDeviceStatus) {
+  std::string input = R"(
+[test]
+clear
+draw rect 2 4 10 20
+draw rect 2 4 10 20)";
+
+  Parser parser;
+  parser.SkipValidationForTest();
+  ASSERT_TRUE(parser.Parse(input).IsSuccess());
+
+  auto engine = MakeEngine();
+  auto script = parser.GetScript();
+
+  Options options;
+  Executor ex;
+  Result r =
+      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+  EXPECT_EQ(2U, ToStub(engine.get())->GetDeviceStatusChecks());
+}
+
+TEST_F(VkScriptExecutorTest, DrawRectCommandDeviceLost) {
+  std::string input = R"(
+[test]
+draw rect 2 4 10 20
+clear)";
+
+  Parser parser;
+  parser.SkipValidationForTest();
+  ASSERT_TRUE(parser.Parse(input).IsSuccess());
+
+  auto engine = MakeEngine();
+  ToStub(engine.get())->LoseDevice();
+  auto script = parser.GetScript();
+
+  Options options;
+  Executor ex;
+  Result r =
+      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ(
+      "Line 3: device lost after RUN (DrawRectCommand): Vulkan::Calling "
+      "vkQueueWaitIdle Fail (DEVICE_LOST)",
+      r.Error());
+  EXPECT_FALSE(ToStub(engine.get())->DidClearCommand());
+}
+
+TEST_F(VkScriptExecutorTest, DrawRectCommandFailureSkipsDeviceStatus) {
+  std::string input = R"(
+[test]
+draw rect 2 4 10 20)";
+
+  Parser parser;
+  parser.SkipValidationForTest();
+  ASSERT_TRUE(parser.Parse(input).IsSuccess());
+
+  auto engine = MakeEngine();
+  ToStub(engine.get())->FailDrawRectCommand();
+  auto script = parser.GetScript();
+
+  Options options;
+  Executor ex;
+  Result r =
+      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ("draw rect command failed", r.Error());
+  EXPECT_EQ(0U, ToStub(engine.get())->GetDeviceStatusChecks());
+}
+
 TEST_F(VkScriptExecutorTest, DrawArraysCommand) {
   std::string input = R"(
 [test]
@@ -679,6 +763,30 @@ compute 2 3 4)";
       ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidComputeCommand());
+}
+
+TEST_F(VkScriptExecutorTest, ComputeCommandDeviceLost) {
+  std::string input = R"(
+[test]
+compute 2 3 4)";
+
+  Parser parser;
+  parser.SkipValidationForTest();
+  ASSERT_TRUE(parser.Parse(input).IsSuccess());
+
+  auto engine = MakeEngine();
+  ToStub(engine.get())->LoseDevice();
+  auto script = parser.GetScript();
+
+  Options options;
+  Executor ex;
+  Result r =
+      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ(
+      "Line 3: device lost after RUN (ComputeCommand): Vulkan::Calling "
+      "vkQueueWaitIdle Fail (DEVICE_LOST)",
+      r.Error());
 }
 
 TEST_F(VkScriptExecutorTest, ComputeCommandFailure) {

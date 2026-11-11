@@ -4389,19 +4389,25 @@ Result Parser::ParseSet() {
     return Result("SET invalid variable to set: " + token->ToOriginalString());
   }
 
-  if (token->AsString() != "fence_timeout_ms") {
-    return Result("SET unknown variable provided: " + token->AsString());
+  const std::string name = token->AsString();
+  uint32_t* value = nullptr;
+  if (name == "fence_timeout_ms") {
+    value = &script_->GetEngineData().fence_timeout_ms;
+  } else if (name == "device_lost_probe_ms") {
+    value = &script_->GetEngineData().device_lost_probe_ms;
+  } else {
+    return Result("SET unknown variable provided: " + name);
   }
 
   token = tokenizer_->NextToken();
   if (token->IsEOS() || token->IsEOL()) {
-    return Result("SET missing value for fence_timeout_ms");
+    return Result("SET missing value for " + name);
   }
   if (!token->IsInteger()) {
-    return Result("SET invalid value for fence_timeout_ms, must be uint32");
+    return Result("SET invalid value for " + name + ", must be uint32");
   }
 
-  script_->GetEngineData().fence_timeout_ms = token->AsUint32();
+  *value = token->AsUint32();
 
   return ValidateEndOfStatement("SET command");
 }

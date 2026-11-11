@@ -44,6 +44,7 @@ class Executor {
                         const ShaderMap& shader_map,
                         Options* options);
   Result ExecuteCommand(Engine* engine, Command* cmd);
+  Result CheckDeviceAfterRun(Engine* engine, const Command* cmd, Result run);
 
   Verifier verifier_;
 };

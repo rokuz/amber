@@ -90,9 +90,11 @@ Result CommandBuffer::SubmitAndReset(uint32_t timeout_ms,
   submit_info.commandBufferCount = 1;
   submit_info.pCommandBuffers = &command_;
 
-  if (device_->GetPtrs()->vkQueueSubmit(device_->GetVkQueue(), 1, &submit_info,
-                                        fence_) != VK_SUCCESS) {
-    return Result("Vulkan::Calling vkQueueSubmit Fail");
+  VkResult submit = device_->GetPtrs()->vkQueueSubmit(device_->GetVkQueue(), 1,
+                                                      &submit_info, fence_);
+  if (submit != VK_SUCCESS) {
+    return Result("Vulkan::Calling vkQueueSubmit Fail (" +
+                  VkResultName(submit) + ")");
   }
 
   guarded_ = false;
@@ -107,22 +109,8 @@ Result CommandBuffer::SubmitAndReset(uint32_t timeout_ms,
     return Result("Vulkan::Calling vkWaitForFences Timeout");
   }
   if (r != VK_SUCCESS) {
-    std::string result_str;
-    switch (r) {
-      case VK_ERROR_OUT_OF_HOST_MEMORY:
-        result_str = "OUT_OF_HOST_MEMORY";
-        break;
-      case VK_ERROR_OUT_OF_DEVICE_MEMORY:
-        result_str = "OUT_OF_DEVICE_MEMORY";
-        break;
-      case VK_ERROR_DEVICE_LOST:
-        result_str = "DEVICE_LOST";
-        break;
-      default:
-        result_str = "<UNEXPECTED RESULT>";
-        break;
-    }
-    return Result("Vulkan::Calling vkWaitForFences Fail (" + result_str + ")");
+    return Result("Vulkan::Calling vkWaitForFences Fail (" + VkResultName(r) +
+                  ")");
   }
 
   /*

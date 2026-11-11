@@ -115,6 +115,22 @@ Result Executor::Execute(Engine* engine,
   return {};
 }
 
+Result Executor::CheckDeviceAfterRun(Engine* engine,
+                                     const Command* cmd,
+                                     Result run) {
+  if (!run.IsSuccess()) {
+    return run;
+  }
+
+  Result r = engine->CheckDeviceStatus();
+  if (!r.IsSuccess()) {
+    return Result("Line " + std::to_string(cmd->GetLine()) +
+                  ": device lost after RUN (" + cmd->ToString() +
+                  "): " + r.Error());
+  }
+  return {};
+}
+
 Result Executor::ExecuteCommand(Engine* engine, Command* cmd) {
   if (cmd->IsProbe()) {
     auto* buffer = cmd->AsProbe()->GetBuffer();
@@ -166,22 +182,28 @@ Result Executor::ExecuteCommand(Engine* engine, Command* cmd) {
     return buffer_from->CopyTo(buffer_to);
   }
   if (cmd->IsDrawRect()) {
-    return engine->DoDrawRect(cmd->AsDrawRect());
+    return CheckDeviceAfterRun(engine, cmd,
+                               engine->DoDrawRect(cmd->AsDrawRect()));
   }
   if (cmd->IsDrawGrid()) {
-    return engine->DoDrawGrid(cmd->AsDrawGrid());
+    return CheckDeviceAfterRun(engine, cmd,
+                               engine->DoDrawGrid(cmd->AsDrawGrid()));
   }
   if (cmd->IsDrawArrays()) {
-    return engine->DoDrawArrays(cmd->AsDrawArrays());
+    return CheckDeviceAfterRun(engine, cmd,
+                               engine->DoDrawArrays(cmd->AsDrawArrays()));
   }
   if (cmd->IsDrawMeshTasks()) {
-    return engine->DoDrawMeshTasks(cmd->AsDrawMeshTasks());
+    return CheckDeviceAfterRun(engine, cmd,
+                               engine->DoDrawMeshTasks(cmd->AsDrawMeshTasks()));
   }
   if (cmd->IsCompute()) {
-    return engine->DoCompute(cmd->AsCompute());
+    return CheckDeviceAfterRun(engine, cmd,
+                               engine->DoCompute(cmd->AsCompute()));
   }
   if (cmd->IsRayTracing()) {
-    return engine->DoTraceRays(cmd->AsRayTracing());
+    return CheckDeviceAfterRun(engine, cmd,
+                               engine->DoTraceRays(cmd->AsRayTracing()));
   }
   if (cmd->IsEntryPoint()) {
     return engine->DoEntryPoint(cmd->AsEntryPoint());

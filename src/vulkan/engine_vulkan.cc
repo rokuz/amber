@@ -22,6 +22,7 @@
 #include "amber/amber_vulkan.h"
 #include "src/type_parser.h"
 #include "src/vulkan/compute_pipeline.h"
+#include "src/vulkan/device_status.h"
 #include "src/vulkan/graphics_pipeline.h"
 #include "src/vulkan/raytracing_pipeline.h"
 
@@ -961,6 +962,25 @@ Result EngineVulkan::DoBuffer(const BufferCommand* cmd) {
                                                    cmd->GetOffset());
   }
   return {};
+}
+
+Result EngineVulkan::CheckDeviceStatus() {
+  if (!pool_) {
+    return {};
+  }
+
+  if (!status_probe_) {
+    auto probe = std::make_unique<CommandBuffer>(device_.get(), pool_.get());
+    Result r = probe->Initialize();
+    if (!r.IsSuccess()) {
+      return r;
+    }
+    status_probe_ = std::move(probe);
+  }
+
+  return vulkan::CheckDeviceStatus(device_.get(), status_probe_.get(),
+                                   GetEngineData().fence_timeout_ms,
+                                   GetEngineData().device_lost_probe_ms);
 }
 
 }  // namespace vulkan

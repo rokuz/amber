@@ -60,6 +60,7 @@ LOCAL_SRC_FILES:= \
     src/vulkan/compute_pipeline.cc \
     src/vulkan/descriptor.cc \
     src/vulkan/device.cc \
+    src/vulkan/device_status.cc \
     src/vulkan/engine_vulkan.cc \
     src/vulkan/frame_buffer.cc \
     src/vulkan/graphics_pipeline.cc \

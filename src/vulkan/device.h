@@ -35,6 +35,8 @@ struct VulkanPtrs {
 #include "vk-wrappers-1-1.h"  // NOLINT(build/include_subdir)
 };
 
+std::string VkResultName(VkResult result);
+
 /// Wrapper around a Vulkan Device object.
 class Device {
  public:

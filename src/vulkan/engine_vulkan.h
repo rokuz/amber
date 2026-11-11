@@ -30,6 +30,7 @@
 #include "src/pipeline.h"
 #include "src/vulkan/blas.h"
 #include "src/vulkan/buffer_descriptor.h"
+#include "src/vulkan/command_buffer.h"
 #include "src/vulkan/command_pool.h"
 #include "src/vulkan/device.h"
 #include "src/vulkan/pipeline.h"
@@ -69,6 +70,7 @@ class EngineVulkan : public Engine {
   Result DoPatchParameterVertices(
       const PatchParameterVerticesCommand* cmd) override;
   Result DoBuffer(const BufferCommand* cmd) override;
+  Result CheckDeviceStatus() override;
 
  private:
   struct PipelineInfo {
@@ -110,6 +112,7 @@ class EngineVulkan : public Engine {
 
   std::unique_ptr<Device> device_;
   std::unique_ptr<CommandPool> pool_;
+  std::unique_ptr<CommandBuffer> status_probe_;
 
   std::map<amber::Pipeline*, PipelineInfo> pipeline_map_;
 

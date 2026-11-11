@@ -21,6 +21,7 @@ set(VULKAN_ENGINE_SOURCES
     command_pool.cc
     compute_pipeline.cc
     device.cc
+    device_status.cc
     descriptor.cc
     engine_vulkan.cc
     frame_buffer.cc

@@ -36,6 +36,7 @@ class VirtualFileStore;
 struct EngineData {
   /// The timeout to use for fences, in milliseconds.
   uint32_t fence_timeout_ms = 10000;
+  uint32_t device_lost_probe_ms = 10;
   bool pipeline_runtime_layer_enabled = false;
 };
 
@@ -120,6 +121,8 @@ class Engine {
   /// This declares an Amber buffer to be bound to a descriptor.
   /// This covers both Vulkan buffers and images.
   virtual Result DoBuffer(const BufferCommand* cmd) = 0;
+
+  virtual Result CheckDeviceStatus() { return {}; }
 
   /// Sets the engine data to use.
   void SetEngineData(const EngineData& data) { engine_data_ = data; }

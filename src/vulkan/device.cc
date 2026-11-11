@@ -498,6 +498,26 @@ bool AreAllExtensionsSupported(
 
 }  // namespace
 
+std::string VkResultName(VkResult result) {
+  switch (result) {
+    case VK_SUCCESS:
+      return "SUCCESS";
+    case VK_NOT_READY:
+      return "NOT_READY";
+    case VK_TIMEOUT:
+      return "TIMEOUT";
+    case VK_ERROR_OUT_OF_HOST_MEMORY:
+      return "OUT_OF_HOST_MEMORY";
+    case VK_ERROR_OUT_OF_DEVICE_MEMORY:
+      return "OUT_OF_DEVICE_MEMORY";
+    case VK_ERROR_DEVICE_LOST:
+      return "DEVICE_LOST";
+    default:
+      break;
+  }
+  return "<UNEXPECTED RESULT>";
+}
+
 Device::Device(VkInstance instance,
                VkPhysicalDevice physical_device,
                uint32_t queue_family_index,
