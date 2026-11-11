@@ -660,8 +660,10 @@ them directly. With the shader groups defined, they are then added into shader b
 ```groovy
   # Create shader binding tables and set shader groups into it
   SHADER_BINDING_TABLE {sbt_name}
-    {group_name_1} [SHADER_RECORD {buffer_name}]
-    [ | {group_name_n} [SHADER_RECORD {buffer_name}]]
+    {group_name_1} [SHADER_RECORD {buffer_name} \
+        [ACCELERATION_STRUCTURE {tlas_name} OFFSET {offset}]*]
+    [ | {group_name_n} [SHADER_RECORD {buffer_name} \
+        [ACCELERATION_STRUCTURE {tlas_name} OFFSET {offset}]*]]
   END
 ```
 
@@ -670,6 +672,13 @@ buffer |buffer_name| are written after the shader group handle, where shaders
 read them through a `shaderRecordEXT` buffer block. All records of a shader
 binding table share one stride, the group handle size plus the largest record
 data, aligned to `shaderGroupHandleAlignment`.
+
+Each `ACCELERATION_STRUCTURE` overwrites 8 bytes of the record data at byte
+|offset| with the device address of the top level acceleration structure
+|tlas_name|, which is built before the rays are traced. Shaders turn such an
+address into an acceleration structure with `accelerationStructureEXT(...)`
+(`OpConvertUToAccelerationStructureKHR`); any other value there is not a valid
+acceleration structure.
 
 Generally a program needs three shader binding tables:
  * ray generation shader binding table with one ray generation shader group

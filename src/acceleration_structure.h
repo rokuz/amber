@@ -245,11 +245,27 @@ class SBTRecord {
   void SetShaderRecordBuffer(Buffer* buffer) { shader_record_buffer_ = buffer; }
   Buffer* GetShaderRecordBuffer() const { return shader_record_buffer_; }
 
+  /// The device address of |tlas| is written into the shader record data at
+  /// byte |offset|.
+  struct AccelerationStructureAddress {
+    TLAS* tlas = nullptr;
+    uint32_t offset = 0;
+  };
+
+  void AddAccelerationStructureAddress(TLAS* tlas, uint32_t offset) {
+    acceleration_structure_addresses_.push_back({tlas, offset});
+  }
+  const std::vector<AccelerationStructureAddress>&
+  GetAccelerationStructureAddresses() const {
+    return acceleration_structure_addresses_;
+  }
+
  private:
   std::string used_shader_group_name_;
   uint32_t count_ = 1;
   uint32_t index_ = static_cast<uint32_t>(-1);
   Buffer* shader_record_buffer_ = nullptr;
+  std::vector<AccelerationStructureAddress> acceleration_structure_addresses_;
 };
 
 class SBT {

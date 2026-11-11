@@ -2977,8 +2977,7 @@ Result Parser::ParseBufferInitializerFill(Buffer* buffer,
   }
 
   auto fmt = buffer->GetFormat();
-  bool is_float_data =
-      fmt->IsFloat16() || fmt->IsFloat32() || fmt->IsFloat64();
+  bool is_float_data = fmt->IsFloat16() || fmt->IsFloat32() || fmt->IsFloat64();
 
   // Inflate the size because our items are multi-dimensional.
   size_in_items = size_in_items * fmt->InputNeededPerElement();
@@ -5151,6 +5150,45 @@ Result Parser::ParseSBT(Pipeline* pipeline) {
         return Result("unknown buffer for SHADER_RECORD: " + token->AsString());
       }
       sbtrecord->SetShaderRecordBuffer(buffer);
+
+      while (true) {
+        next = tokenizer_->PeekNextToken();
+        if (!next->IsIdentifier() ||
+            next->AsString() != "ACCELERATION_STRUCTURE") {
+          break;
+        }
+        tokenizer_->NextToken();
+
+        token = tokenizer_->NextToken();
+        if (!token->IsIdentifier()) {
+          return Result(
+              "ACCELERATION_STRUCTURE requires a top level acceleration "
+              "structure name");
+        }
+        TLAS* tlas = script_->GetTLAS(token->AsString());
+        if (tlas == nullptr) {
+          return Result(
+              "unknown top level acceleration structure for SHADER_RECORD: " +
+              token->AsString());
+        }
+
+        token = tokenizer_->NextToken();
+        if (!token->IsIdentifier() || token->AsString() != "OFFSET") {
+          return Result("ACCELERATION_STRUCTURE requires OFFSET");
+        }
+        token = tokenizer_->NextToken();
+        if (!token->IsInteger()) {
+          return Result("OFFSET expects an integer");
+        }
+        const uint32_t offset = token->AsUint32();
+        if (static_cast<uint64_t>(offset) + sizeof(uint64_t) >
+            buffer->GetSizeInBytes()) {
+          return Result("acceleration structure address at OFFSET " +
+                        std::to_string(offset) +
+                        " does not fit in the shader record");
+        }
+        sbtrecord->AddAccelerationStructureAddress(tlas, offset);
+      }
     }
 
     sbt->AddSBTRecord(std::move(sbtrecord));

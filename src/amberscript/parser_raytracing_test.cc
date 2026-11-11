@@ -1210,6 +1210,150 @@ END
   EXPECT_EQ("10: unknown buffer for SHADER_RECORD: missing", r.Error());
 }
 
+TEST_F(AmberScriptParserTest,
+       RayTracingPipelineSBTShaderRecordAccelerationStructure) {
+  std::string in = R"(
+SHADER ray_generation raygen1 GLSL
+  #version 460 core
+  void main() {}
+END
+BUFFER record1 DATA_TYPE uint32 DATA 1 2 3 4 5 END
+ACCELERATION_STRUCTURE BOTTOM_LEVEL blas
+  GEOMETRY TRIANGLES
+    0 0 0  0 1 0  1 0 0
+  END
+END
+ACCELERATION_STRUCTURE TOP_LEVEL tlas
+  BOTTOM_LEVEL_INSTANCE blas
+  END
+END
+
+PIPELINE raytracing my_rtpipeline
+  SHADER_GROUP g1 raygen1
+  SHADER_BINDING_TABLE sbt1
+    g1 SHADER_RECORD record1 ACCELERATION_STRUCTURE tlas OFFSET 4 ACCELERATION_STRUCTURE tlas OFFSET 12
+  END
+END
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+
+  auto script = parser.GetScript();
+  auto* sbt1 = script->GetPipelines()[0]->GetSBT("sbt1");
+  ASSERT_TRUE(sbt1 != nullptr);
+  ASSERT_EQ(1U, sbt1->GetSBTRecordCount());
+  const auto& addresses =
+      sbt1->GetSBTRecords()[0]->GetAccelerationStructureAddresses();
+  ASSERT_EQ(2U, addresses.size());
+  EXPECT_EQ(script->GetTLAS("tlas"), addresses[0].tlas);
+  EXPECT_EQ(4U, addresses[0].offset);
+  EXPECT_EQ(script->GetTLAS("tlas"), addresses[1].tlas);
+  EXPECT_EQ(12U, addresses[1].offset);
+}
+
+TEST_F(AmberScriptParserTest,
+       RayTracingPipelineSBTShaderRecordUnknownAccelerationStructure) {
+  std::string in = R"(
+SHADER ray_generation raygen1 GLSL
+  #version 460 core
+  void main() {}
+END
+BUFFER record1 DATA_TYPE uint32 DATA 1 2 3 4 5 END
+ACCELERATION_STRUCTURE BOTTOM_LEVEL blas
+  GEOMETRY TRIANGLES
+    0 0 0  0 1 0  1 0 0
+  END
+END
+ACCELERATION_STRUCTURE TOP_LEVEL tlas
+  BOTTOM_LEVEL_INSTANCE blas
+  END
+END
+
+PIPELINE raytracing my_rtpipeline
+  SHADER_GROUP g1 raygen1
+  SHADER_BINDING_TABLE sbt1
+    g1 SHADER_RECORD record1 ACCELERATION_STRUCTURE missing OFFSET 0
+  END
+END
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ(
+      "20: unknown top level acceleration structure for SHADER_RECORD: missing",
+      r.Error());
+}
+
+TEST_F(AmberScriptParserTest,
+       RayTracingPipelineSBTShaderRecordAccelerationStructureNoOffset) {
+  std::string in = R"(
+SHADER ray_generation raygen1 GLSL
+  #version 460 core
+  void main() {}
+END
+BUFFER record1 DATA_TYPE uint32 DATA 1 2 3 4 5 END
+ACCELERATION_STRUCTURE BOTTOM_LEVEL blas
+  GEOMETRY TRIANGLES
+    0 0 0  0 1 0  1 0 0
+  END
+END
+ACCELERATION_STRUCTURE TOP_LEVEL tlas
+  BOTTOM_LEVEL_INSTANCE blas
+  END
+END
+
+PIPELINE raytracing my_rtpipeline
+  SHADER_GROUP g1 raygen1
+  SHADER_BINDING_TABLE sbt1
+    g1 SHADER_RECORD record1 ACCELERATION_STRUCTURE tlas 4
+  END
+END
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ("20: ACCELERATION_STRUCTURE requires OFFSET", r.Error());
+}
+
+TEST_F(AmberScriptParserTest,
+       RayTracingPipelineSBTShaderRecordAccelerationStructureOutside) {
+  std::string in = R"(
+SHADER ray_generation raygen1 GLSL
+  #version 460 core
+  void main() {}
+END
+BUFFER record1 DATA_TYPE uint32 DATA 1 2 3 4 5 END
+ACCELERATION_STRUCTURE BOTTOM_LEVEL blas
+  GEOMETRY TRIANGLES
+    0 0 0  0 1 0  1 0 0
+  END
+END
+ACCELERATION_STRUCTURE TOP_LEVEL tlas
+  BOTTOM_LEVEL_INSTANCE blas
+  END
+END
+
+PIPELINE raytracing my_rtpipeline
+  SHADER_GROUP g1 raygen1
+  SHADER_BINDING_TABLE sbt1
+    g1 SHADER_RECORD record1 ACCELERATION_STRUCTURE tlas OFFSET 16
+  END
+END
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ(
+      "20: acceleration structure address at OFFSET 16 does not fit in the "
+      "shader record",
+      r.Error());
+}
+
 TEST_F(AmberScriptParserTest, RayTracingRun) {
   std::string in = R"(
 SHADER ray_generation raygen1 GLSL

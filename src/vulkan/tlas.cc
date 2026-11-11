@@ -239,6 +239,17 @@ Result TLAS::BuildTLAS(VkCommandBuffer cmdBuffer) {
   return {};
 }
 
+VkDeviceAddress TLAS::GetVkTLASDeviceAddress() {
+  VkAccelerationStructureDeviceAddressInfoKHR info = {
+      VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR, nullptr,
+      tlas_};
+
+  assert(tlas_ != VK_NULL_HANDLE);
+
+  return device_->GetPtrs()->vkGetAccelerationStructureDeviceAddressKHR(
+      device_->GetVkDevice(), &info);
+}
+
 TLAS::~TLAS() {
   if (tlas_ != VK_NULL_HANDLE) {
     device_->GetPtrs()->vkDestroyAccelerationStructureKHR(

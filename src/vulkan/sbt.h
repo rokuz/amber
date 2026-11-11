@@ -21,6 +21,7 @@
 
 #include "src/acceleration_structure.h"
 #include "src/vulkan/device.h"
+#include "src/vulkan/resource.h"
 #include "src/vulkan/transfer_buffer.h"
 
 namespace amber {
@@ -31,7 +32,7 @@ class SBT {
   explicit SBT(Device* device);
   ~SBT();
 
-  Result Create(amber::SBT* sbt, VkPipeline pipeline);
+  Result Create(amber::SBT* sbt, VkPipeline pipeline, TlasesMap* tlases);
   TransferBuffer* getBuffer() { return buffer_.get(); }
   VkDeviceAddress GetDeviceAddress() const { return address_; }
   VkDeviceSize GetStride() const { return stride_; }

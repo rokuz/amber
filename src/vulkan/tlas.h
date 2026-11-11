@@ -33,6 +33,7 @@ class TLAS {
   Result CreateTLAS(amber::TLAS* tlas, BlasesMap* blases);
   Result BuildTLAS(VkCommandBuffer cmdBuffer);
   VkAccelerationStructureKHR GetVkTLAS() { return tlas_; }
+  VkDeviceAddress GetVkTLASDeviceAddress();
 
  private:
   Device* device_ = nullptr;

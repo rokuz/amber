@@ -130,7 +130,7 @@ Result RayTracingPipeline::getVulkanSBTRegion(
 
       vSBT = sbt_vulkan.first->second;
 
-      Result r = vSBT->Create(aSBT, pipeline);
+      Result r = vSBT->Create(aSBT, pipeline, tlases_);
       if (!r.IsSuccess()) {
         return r;
       }
@@ -142,6 +142,28 @@ Result RayTracingPipeline::getVulkanSBTRegion(
         vSBT->GetDeviceAddress(), vSBT->GetStride(), vSBT->GetSize());
   } else {
     *region = makeStridedDeviceAddressRegionKHR(0, 0, 0);
+  }
+
+  return {};
+}
+
+Result RayTracingPipeline::CreateShaderRecordTLASes(amber::SBT* aSBT) {
+  if (aSBT == nullptr) {
+    return {};
+  }
+
+  for (auto& record : aSBT->GetSBTRecords()) {
+    for (const auto& address : record->GetAccelerationStructureAddresses()) {
+      if (tlases_->find(address.tlas) != tlases_->end()) {
+        continue;
+      }
+      auto& vulkan_tlas =
+          ((*tlases_)[address.tlas] = std::make_unique<TLAS>(device_));
+      Result r = vulkan_tlas->CreateTLAS(address.tlas, blases_);
+      if (!r.IsSuccess()) {
+        return r;
+      }
+    }
   }
 
   return {};
@@ -183,6 +205,13 @@ Result RayTracingPipeline::TraceRays(amber::SBT* rSBT,
   Result r = SendDescriptorDataToDeviceIfNeeded();
   if (!r.IsSuccess()) {
     return r;
+  }
+
+  for (amber::SBT* sbt : {rSBT, mSBT, hSBT, cSBT}) {
+    r = CreateShaderRecordTLASes(sbt);
+    if (!r.IsSuccess()) {
+      return r;
+    }
   }
 
   r = InitLibrary(libs, maxPipelineRayPayloadSize,

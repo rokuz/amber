@@ -19,6 +19,7 @@
 #include "src/buffer.h"
 #include "src/vulkan/pipeline.h"
 #include "src/vulkan/sbt.h"
+#include "src/vulkan/tlas.h"
 
 namespace amber {
 namespace vulkan {
@@ -32,7 +33,7 @@ VkDeviceSize AlignUp(VkDeviceSize value, VkDeviceSize alignment) {
 
 SBT::SBT(Device* device) : device_(device) {}
 
-Result SBT::Create(amber::SBT* sbt, VkPipeline pipeline) {
+Result SBT::Create(amber::SBT* sbt, VkPipeline pipeline, TlasesMap* tlases) {
   uint32_t handles_count = 0;
   uint32_t record_size = 0;
   for (auto& x : sbt->GetSBTRecords()) {
@@ -40,6 +41,19 @@ Result SBT::Create(amber::SBT* sbt, VkPipeline pipeline) {
     Buffer* record = x->GetShaderRecordBuffer();
     if (record != nullptr) {
       record_size = std::max(record_size, record->GetSizeInBytes());
+    }
+    for (const auto& address : x->GetAccelerationStructureAddresses()) {
+      if (record == nullptr ||
+          static_cast<uint64_t>(address.offset) + sizeof(uint64_t) >
+              record->GetSizeInBytes()) {
+        return Result(
+            "acceleration structure address does not fit in the shader "
+            "record");
+      }
+      if (tlases == nullptr || tlases->find(address.tlas) == tlases->end()) {
+        return Result("acceleration structure " + address.tlas->GetName() +
+                      " of a shader record was not created");
+      }
     }
   }
 
@@ -115,6 +129,11 @@ Result SBT::Create(amber::SBT* sbt, VkPipeline pipeline) {
         memcpy(slot + handle_size, record->ValuePtr()->data(),
                std::min(static_cast<size_t>(record->GetSizeInBytes()),
                         record->ValuePtr()->size()));
+      }
+      for (const auto& address : x->GetAccelerationStructureAddresses()) {
+        const uint64_t value = static_cast<uint64_t>(
+            tlases->at(address.tlas)->GetVkTLASDeviceAddress());
+        memcpy(slot + handle_size + address.offset, &value, sizeof(value));
       }
     }
   }
