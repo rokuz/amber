@@ -67,6 +67,12 @@ Result ToVkShaderStage(ShaderType type, VkShaderStageFlagBits* ret) {
     case kShaderTypeCall:
       *ret = VK_SHADER_STAGE_CALLABLE_BIT_KHR;
       break;
+    case kShaderTypeTask:
+      *ret = VK_SHADER_STAGE_TASK_BIT_EXT;
+      break;
+    case kShaderTypeMesh:
+      *ret = VK_SHADER_STAGE_MESH_BIT_EXT;
+      break;
     case kShaderTypeCompute:
       *ret = VK_SHADER_STAGE_COMPUTE_BIT;
       break;
@@ -823,6 +829,16 @@ Result EngineVulkan::DoDrawArrays(const DrawArraysCommand* command) {
 
   return info.vk_pipeline->AsGraphics()->Draw(command, info.vertex_buffer.get(),
                                               command->IsTimedExecution());
+}
+
+Result EngineVulkan::DoDrawMeshTasks(const DrawMeshTasksCommand* command) {
+  auto& info = pipeline_map_[command->GetPipeline()];
+  if (!info.vk_pipeline || !info.vk_pipeline->IsGraphics()) {
+    return Result("Vulkan::DrawMeshTasks for Non-Graphics Pipeline");
+  }
+
+  return info.vk_pipeline->AsGraphics()->DrawMeshTasks(
+      command, command->IsTimedExecution());
 }
 
 Result EngineVulkan::DoCompute(const ComputeCommand* command) {

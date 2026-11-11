@@ -377,6 +377,8 @@ INSTANTIATE_TEST_SUITE_P(
                        kShaderTypeTessellationEvaluation},
         ShaderTypeData{"tessellation_control", kShaderTypeTessellationControl},
         ShaderTypeData{"compute", kShaderTypeCompute},
+        ShaderTypeData{"task", kShaderTypeTask},
+        ShaderTypeData{"mesh", kShaderTypeMesh},
         ShaderTypeData{"multi",
                        kShaderTypeMulti}));  // NOLINT(whitespace/parens)
 

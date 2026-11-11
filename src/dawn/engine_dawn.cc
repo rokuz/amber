@@ -1484,6 +1484,10 @@ Result EngineDawn::DoCompute(const ComputeCommand* command) {
   return result;
 }
 
+Result EngineDawn::DoDrawMeshTasks(const DrawMeshTasksCommand* /* command */) {
+  return Result("Dawn: Draw mesh tasks not yet implemented");
+}
+
 Result EngineDawn::DoTraceRays(const RayTracingCommand* /* command */) {
   return Result("Dawn: Trace Rays not yet implemented");
 }

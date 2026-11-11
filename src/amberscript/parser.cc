@@ -476,6 +476,10 @@ Result Parser::ToShaderType(const std::string& str, ShaderType* type) {
     *type = kShaderTypeIntersection;
   } else if (str == "callable") {
     *type = kShaderTypeCall;
+  } else if (str == "task") {
+    *type = kShaderTypeTask;
+  } else if (str == "mesh") {
+    *type = kShaderTypeMesh;
   } else if (str == "multi") {
     *type = kShaderTypeMulti;
   } else {
@@ -657,7 +661,8 @@ Result Parser::ParseShaderBlock() {
     return Result("SHADER missing END command");
   }
 
-  if (shader->GetTargetEnv().empty() && IsRayTracingShader(type)) {
+  if (shader->GetTargetEnv().empty() &&
+      (IsRayTracingShader(type) || isMeshShadingShaderType(type))) {
     shader->SetTargetEnv("spv1.4");
   }
 
@@ -3455,6 +3460,47 @@ Result Parser::ParseRun() {
     return ValidateEndOfStatement("RUN command");
   }
 
+  if (token->AsString() == "DRAW_MESH_TASKS") {
+    if (!pipeline->IsGraphics()) {
+      return Result("RUN command requires graphics pipeline");
+    }
+
+    bool has_mesh_shader = false;
+    for (const auto& info : pipeline->GetShaders()) {
+      if (info.GetShaderType() == kShaderTypeMesh) {
+        has_mesh_shader = true;
+      }
+    }
+    if (!has_mesh_shader) {
+      return Result("RUN DRAW_MESH_TASKS requires a mesh shader");
+    }
+
+    auto cmd = std::make_unique<DrawMeshTasksCommand>(
+        pipeline, *pipeline->GetPipelineData());
+    cmd->SetLine(line);
+    if (is_timed_execution) {
+      cmd->SetTimedExecution();
+    }
+
+    for (int i = 0; i < 3; i++) {
+      token = tokenizer_->NextToken();
+      if (!token->IsInteger()) {
+        return Result("invalid parameter for RUN DRAW_MESH_TASKS command: " +
+                      token->ToOriginalString());
+      }
+      if (i == 0) {
+        cmd->SetX(token->AsUint32());
+      } else if (i == 1) {
+        cmd->SetY(token->AsUint32());
+      } else {
+        cmd->SetZ(token->AsUint32());
+      }
+    }
+
+    command_list_.push_back(std::move(cmd));
+    return ValidateEndOfStatement("RUN command");
+  }
+
   if (token->AsString() == "DRAW_ARRAY") {
     if (!pipeline->IsGraphics()) {
       return Result("RUN command requires graphics pipeline");
@@ -5085,6 +5131,21 @@ Result Parser::ParseSBT(Pipeline* pipeline) {
     sbtrecord->SetUsedShaderGroupName(tok);
     sbtrecord->SetIndex(index);
     sbtrecord->SetCount(1);
+
+    auto next = tokenizer_->PeekNextToken();
+    if (next->IsIdentifier() && next->AsString() == "SHADER_RECORD") {
+      tokenizer_->NextToken();
+      token = tokenizer_->NextToken();
+      if (!token->IsIdentifier()) {
+        return Result("SHADER_RECORD requires a buffer name");
+      }
+
+      Buffer* buffer = script_->GetBuffer(token->AsString());
+      if (!buffer) {
+        return Result("unknown buffer for SHADER_RECORD: " + token->AsString());
+      }
+      sbtrecord->SetShaderRecordBuffer(buffer);
+    }
 
     sbt->AddSBTRecord(std::move(sbtrecord));
   }

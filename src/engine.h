@@ -100,6 +100,9 @@ class Engine {
   /// Execute the draw arrays command
   virtual Result DoDrawArrays(const DrawArraysCommand* cmd) = 0;
 
+  /// Execute the draw mesh tasks command
+  virtual Result DoDrawMeshTasks(const DrawMeshTasksCommand* cmd) = 0;
+
   /// Execute the compute command
   virtual Result DoCompute(const ComputeCommand* cmd) = 0;
 

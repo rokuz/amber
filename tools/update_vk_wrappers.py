@@ -200,6 +200,15 @@ def gen_direct_headers(methods):
   return content
 
 
+def write_if_changed(path, content):
+  if os.path.isfile(path):
+    with open(path, 'r') as f:
+      if content == f.read():
+        return
+  with open(path, 'w') as f:
+    f.write(content)
+
+
 def main():
   if len(sys.argv) != 3:
     print('usage: {} <outdir> <src_dir>'.format(
@@ -229,20 +238,10 @@ def main():
       header_content = gen_direct_headers(data)
 
     outfile = os.path.join(outdir, 'vk-wrappers-%s.inc' % vulkan_version)
-    if os.path.isfile(outfile):
-      with open(outfile, 'r') as f:
-        if wrapper_content == f.read():
-          return
-    with open(outfile, 'w') as f:
-      f.write(wrapper_content)
+    write_if_changed(outfile, wrapper_content)
 
     hdrfile = os.path.join(outdir, 'vk-wrappers-%s.h' % vulkan_version)
-    if os.path.isfile(hdrfile):
-      with open(hdrfile, 'r') as f:
-        if header_content == f.read():
-          return
-    with open(hdrfile, 'w') as f:
-      f.write(header_content)
+    write_if_changed(hdrfile, header_content)
 
 
 if __name__ == '__main__':

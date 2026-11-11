@@ -36,6 +36,7 @@ enum class GeometryType : int8_t {
   kAABB,
 };
 
+class Buffer;
 class Shader;
 
 class Geometry {
@@ -241,10 +242,14 @@ class SBTRecord {
   void SetIndex(const uint32_t index) { index_ = index; }
   uint32_t GetIndex() const { return index_; }
 
+  void SetShaderRecordBuffer(Buffer* buffer) { shader_record_buffer_ = buffer; }
+  Buffer* GetShaderRecordBuffer() const { return shader_record_buffer_; }
+
  private:
   std::string used_shader_group_name_;
   uint32_t count_ = 1;
   uint32_t index_ = static_cast<uint32_t>(-1);
+  Buffer* shader_record_buffer_ = nullptr;
 };
 
 class SBT {

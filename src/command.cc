@@ -67,6 +67,10 @@ DrawGridCommand* Command::AsDrawGrid() {
   return static_cast<DrawGridCommand*>(this);
 }
 
+DrawMeshTasksCommand* Command::AsDrawMeshTasks() {
+  return static_cast<DrawMeshTasksCommand*>(this);
+}
+
 EntryPointCommand* Command::AsEntryPoint() {
   return static_cast<EntryPointCommand*>(this);
 }
@@ -110,6 +114,12 @@ DrawArraysCommand::DrawArraysCommand(Pipeline* pipeline, PipelineData data)
     : PipelineCommand(Type::kDrawArrays, pipeline), data_(data) {}
 
 DrawArraysCommand::~DrawArraysCommand() = default;
+
+DrawMeshTasksCommand::DrawMeshTasksCommand(Pipeline* pipeline,
+                                           PipelineData data)
+    : PipelineCommand(Type::kDrawMeshTasks, pipeline), data_(data) {}
+
+DrawMeshTasksCommand::~DrawMeshTasksCommand() = default;
 
 CompareBufferCommand::CompareBufferCommand(Buffer* buffer_1, Buffer* buffer_2)
     : Command(Type::kCompareBuffer), buffer_1_(buffer_1), buffer_2_(buffer_2) {}

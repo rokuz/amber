@@ -17,6 +17,7 @@
 #include <vulkan/vulkan.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstring>
 #include <iostream>
 #include <iterator>
@@ -95,6 +96,217 @@ const char kBufferDeviceAddress[] =
     "BufferDeviceAddressFeatures.bufferDeviceAddress";
 const char kRayTracingPipeline[] =
     "RayTracingPipelineFeaturesKHR.rayTracingPipeline";
+const char kRayTraversalPrimitiveCulling[] =
+    "RayTracingPipelineFeaturesKHR.rayTraversalPrimitiveCulling";
+
+struct FeatureStructInfo {
+  const char* prefix;
+  VkStructureType type;
+  const char* extension;
+  size_t size;
+  bool always_enabled;
+  std::vector<std::pair<std::string, size_t>> fields;
+};
+
+#define AMBER_FEATURE_FIELD(type, field) {#field, offsetof(type, field)}
+
+const std::vector<FeatureStructInfo>& KnownFeatureStructs() {
+  static const std::vector<FeatureStructInfo> kStructs = {
+      {"RayQueryFeaturesKHR",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR,
+       VK_KHR_RAY_QUERY_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceRayQueryFeaturesKHR),
+       false,
+       {AMBER_FEATURE_FIELD(VkPhysicalDeviceRayQueryFeaturesKHR, rayQuery)}},
+      {"RayTracingPositionFetchFeaturesKHR",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_POSITION_FETCH_FEATURES_KHR,
+       VK_KHR_RAY_TRACING_POSITION_FETCH_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceRayTracingPositionFetchFeaturesKHR),
+       false,
+       {AMBER_FEATURE_FIELD(VkPhysicalDeviceRayTracingPositionFetchFeaturesKHR,
+                            rayTracingPositionFetch)}},
+      {"RayTracingMaintenance1FeaturesKHR",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MAINTENANCE_1_FEATURES_KHR,
+       VK_KHR_RAY_TRACING_MAINTENANCE_1_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceRayTracingMaintenance1FeaturesKHR),
+       false,
+       {AMBER_FEATURE_FIELD(VkPhysicalDeviceRayTracingMaintenance1FeaturesKHR,
+                            rayTracingMaintenance1),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceRayTracingMaintenance1FeaturesKHR,
+                            rayTracingPipelineTraceRaysIndirect2)}},
+      {"RayTracingMotionBlurFeaturesNV",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MOTION_BLUR_FEATURES_NV,
+       VK_NV_RAY_TRACING_MOTION_BLUR_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceRayTracingMotionBlurFeaturesNV),
+       false,
+       {AMBER_FEATURE_FIELD(VkPhysicalDeviceRayTracingMotionBlurFeaturesNV,
+                            rayTracingMotionBlur),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceRayTracingMotionBlurFeaturesNV,
+                            rayTracingMotionBlurPipelineTraceRaysIndirect)}},
+      {"MeshShaderFeaturesEXT",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
+       VK_EXT_MESH_SHADER_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceMeshShaderFeaturesEXT),
+       false,
+       {AMBER_FEATURE_FIELD(VkPhysicalDeviceMeshShaderFeaturesEXT, taskShader),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceMeshShaderFeaturesEXT, meshShader),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceMeshShaderFeaturesEXT,
+                            multiviewMeshShader),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceMeshShaderFeaturesEXT,
+                            primitiveFragmentShadingRateMeshShader),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceMeshShaderFeaturesEXT,
+                            meshShaderQueries)}},
+      {"MeshShaderFeaturesNV",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV,
+       VK_NV_MESH_SHADER_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceMeshShaderFeaturesNV),
+       false,
+       {AMBER_FEATURE_FIELD(VkPhysicalDeviceMeshShaderFeaturesNV, taskShader),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceMeshShaderFeaturesNV, meshShader)}},
+      {"FragmentShadingRateFeaturesKHR",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR,
+       VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceFragmentShadingRateFeaturesKHR),
+       false,
+       {AMBER_FEATURE_FIELD(VkPhysicalDeviceFragmentShadingRateFeaturesKHR,
+                            pipelineFragmentShadingRate),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceFragmentShadingRateFeaturesKHR,
+                            primitiveFragmentShadingRate),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceFragmentShadingRateFeaturesKHR,
+                            attachmentFragmentShadingRate)}},
+      {"DescriptorIndexingFeatures",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
+       VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceDescriptorIndexingFeatures),
+       true,
+       {AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            shaderInputAttachmentArrayDynamicIndexing),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            shaderUniformTexelBufferArrayDynamicIndexing),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            shaderStorageTexelBufferArrayDynamicIndexing),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            shaderUniformBufferArrayNonUniformIndexing),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            shaderSampledImageArrayNonUniformIndexing),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            shaderStorageBufferArrayNonUniformIndexing),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            shaderStorageImageArrayNonUniformIndexing),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            shaderInputAttachmentArrayNonUniformIndexing),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            shaderUniformTexelBufferArrayNonUniformIndexing),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            shaderStorageTexelBufferArrayNonUniformIndexing),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            descriptorBindingUniformBufferUpdateAfterBind),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            descriptorBindingSampledImageUpdateAfterBind),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            descriptorBindingStorageImageUpdateAfterBind),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            descriptorBindingStorageBufferUpdateAfterBind),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            descriptorBindingUniformTexelBufferUpdateAfterBind),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            descriptorBindingStorageTexelBufferUpdateAfterBind),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            descriptorBindingUpdateUnusedWhilePending),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            descriptorBindingPartiallyBound),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            descriptorBindingVariableDescriptorCount),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceDescriptorIndexingFeatures,
+                            runtimeDescriptorArray)}},
+      {"ShaderDemoteToHelperInvocationFeatures",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DEMOTE_TO_HELPER_INVOCATION_FEATURES,
+       VK_EXT_SHADER_DEMOTE_TO_HELPER_INVOCATION_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures),
+       false,
+       {AMBER_FEATURE_FIELD(
+           VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures,
+           shaderDemoteToHelperInvocation)}},
+      {"ShaderAtomicInt64Features",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES,
+       VK_KHR_SHADER_ATOMIC_INT64_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceShaderAtomicInt64Features),
+       false,
+       {AMBER_FEATURE_FIELD(VkPhysicalDeviceShaderAtomicInt64Features,
+                            shaderBufferInt64Atomics),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceShaderAtomicInt64Features,
+                            shaderSharedInt64Atomics)}},
+  };
+  return kStructs;
+}
+
+#undef AMBER_FEATURE_FIELD
+
+const FeatureStructInfo* FindFeatureStruct(const std::string& feature,
+                                           size_t* offset) {
+  const size_t dot = feature.find('.');
+  if (dot == std::string::npos) {
+    return nullptr;
+  }
+  const std::string prefix = feature.substr(0, dot);
+  const std::string field = feature.substr(dot + 1);
+  for (const auto& info : KnownFeatureStructs()) {
+    if (prefix != info.prefix) {
+      continue;
+    }
+    for (const auto& known : info.fields) {
+      if (known.first == field) {
+        *offset = known.second;
+        return &info;
+      }
+    }
+    return nullptr;
+  }
+  return nullptr;
+}
+
+std::vector<uint64_t> NewFeatureStruct(const FeatureStructInfo& info,
+                                       void* next) {
+  std::vector<uint64_t> storage((info.size + sizeof(uint64_t) - 1) /
+                                sizeof(uint64_t));
+  VkBaseOutStructure header = {};
+  header.sType = info.type;
+  header.pNext = static_cast<VkBaseOutStructure*>(next);
+  memcpy(storage.data(), &header, sizeof(header));
+  return storage;
+}
+
+VkBool32 GetFeatureField(const std::vector<uint64_t>& storage, size_t offset) {
+  VkBool32 value = VK_FALSE;
+  memcpy(&value, reinterpret_cast<const uint8_t*>(storage.data()) + offset,
+         sizeof(value));
+  return value;
+}
+
+void SetFeatureField(std::vector<uint64_t>* storage, size_t offset) {
+  const VkBool32 value = VK_TRUE;
+  memcpy(reinterpret_cast<uint8_t*>(storage->data()) + offset, &value,
+         sizeof(value));
+}
+
+std::vector<uint64_t>* EnableFeatureStruct(
+    const FeatureStructInfo& info,
+    std::vector<VkStructureType>* types,
+    std::vector<std::vector<uint64_t>>* structs,
+    std::vector<std::string>* extensions) {
+  for (size_t i = 0; i < types->size(); ++i) {
+    if ((*types)[i] == info.type) {
+      return &(*structs)[i];
+    }
+  }
+  types->push_back(info.type);
+  structs->push_back(NewFeatureStruct(info, nullptr));
+  if (std::find(extensions->begin(), extensions->end(), info.extension) ==
+      extensions->end()) {
+    extensions->push_back(info.extension);
+  }
+  return &structs->back();
+}
 
 const char kExtensionForValidationLayer[] = "VK_EXT_debug_report";
 
@@ -924,8 +1136,6 @@ amber::Result ConfigHelperVulkan::CheckVulkanPhysicalDeviceRequirements(
       supports_.buffer_device_address = true;
     } else if (ext == VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) {
       supports_.ray_tracing_pipeline = true;
-    } else if (ext == VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME) {
-      supports_.descriptor_indexing = true;
     } else if (ext == VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME) {
       supports_.deferred_host_operations = true;
     } else if (ext == VK_KHR_SPIRV_1_4_EXTENSION_NAME) {
@@ -970,8 +1180,6 @@ amber::Result ConfigHelperVulkan::CheckVulkanPhysicalDeviceRequirements(
         {};
     VkPhysicalDeviceRayTracingPipelineFeaturesKHR
         ray_tracing_pipeline_features = {};
-    VkPhysicalDeviceDescriptorIndexingFeatures descriptor_indexing_features =
-        {};
     void* next_ptr = nullptr;
 
     if (supports_.subgroup_size_control) {
@@ -1060,11 +1268,17 @@ amber::Result ConfigHelperVulkan::CheckVulkanPhysicalDeviceRequirements(
       next_ptr = &ray_tracing_pipeline_features;
     }
 
-    if (supports_.descriptor_indexing) {
-      descriptor_indexing_features.sType =
-          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
-      descriptor_indexing_features.pNext = next_ptr;
-      next_ptr = &descriptor_indexing_features;
+    std::vector<std::vector<uint64_t>> extension_features;
+    std::vector<const FeatureStructInfo*> extension_feature_infos;
+    for (const auto& info : KnownFeatureStructs()) {
+      if (std::find(vk_.available_device_extensions.begin(),
+                    vk_.available_device_extensions.end(),
+                    info.extension) == vk_.available_device_extensions.end()) {
+        continue;
+      }
+      extension_features.push_back(NewFeatureStruct(info, next_ptr));
+      extension_feature_infos.push_back(&info);
+      next_ptr = extension_features.back().data();
     }
 
     VkPhysicalDeviceFeatures2KHR features2 = VkPhysicalDeviceFeatures2KHR();
@@ -1102,6 +1316,20 @@ amber::Result ConfigHelperVulkan::CheckVulkanPhysicalDeviceRequirements(
       // No dot means this is a features1 feature.
       if (feature.find_first_of('.') == std::string::npos) {
         required_features1.push_back(feature);
+        continue;
+      }
+
+      size_t offset = 0;
+      const FeatureStructInfo* info = FindFeatureStruct(feature, &offset);
+      if (info != nullptr) {
+        auto found = std::find(extension_feature_infos.begin(),
+                               extension_feature_infos.end(), info);
+        if (found == extension_feature_infos.end() ||
+            GetFeatureField(extension_features[static_cast<size_t>(
+                                found - extension_feature_infos.begin())],
+                            offset) == VK_FALSE) {
+          return amber::Result("Device does not support all required features");
+        }
         continue;
       }
 
@@ -1164,7 +1392,10 @@ amber::Result ConfigHelperVulkan::CheckVulkanPhysicalDeviceRequirements(
           (feature == kBufferDeviceAddress &&
            buffer_device_address_features.bufferDeviceAddress == VK_FALSE) ||
           (feature == kRayTracingPipeline &&
-           ray_tracing_pipeline_features.rayTracingPipeline == VK_FALSE)) {
+           ray_tracing_pipeline_features.rayTracingPipeline == VK_FALSE) ||
+          (feature == kRayTraversalPrimitiveCulling &&
+           ray_tracing_pipeline_features.rayTraversalPrimitiveCulling ==
+               VK_FALSE)) {
         return amber::Result("Device does not support all required features");
       }
     }
@@ -1313,6 +1544,9 @@ amber::Result ConfigHelperVulkan::CreateDeviceWithFeatures2(
                           bool enabled, auto& feature_obj,
                           enum VkStructureType struct_type,
                           const char* name = nullptr) {
+    if (feature_obj.sType == struct_type) {
+      return;
+    }
     feature_obj.sType = struct_type;
     feature_obj.pNext = nullptr;
 
@@ -1339,7 +1573,7 @@ amber::Result ConfigHelperVulkan::CreateDeviceWithFeatures2(
       continue;
     }
 
-    if (StartsWith(feature, "VariablePointersFeatures.")) {
+    if (StartsWith(feature, "VariablePointerFeatures.")) {
       init_feature(
           supports_.variable_pointers, features_.variable_pointers,
           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VARIABLE_POINTER_FEATURES_KHR,
@@ -1460,18 +1694,43 @@ amber::Result ConfigHelperVulkan::CreateDeviceWithFeatures2(
           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES,
           VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
       features_.buffer_device_address.bufferDeviceAddress = VK_TRUE;
-    } else if (feature == kRayTracingPipeline) {
+    } else if (StartsWith(feature, "RayTracingPipelineFeaturesKHR.")) {
       init_feature(
           supports_.ray_tracing_pipeline, features_.ray_tracing_pipeline,
           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
           VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
-      features_.ray_tracing_pipeline.rayTracingPipeline = VK_TRUE;
+      if (feature == kRayTracingPipeline) {
+        features_.ray_tracing_pipeline.rayTracingPipeline = VK_TRUE;
+      } else if (feature == kRayTraversalPrimitiveCulling) {
+        features_.ray_tracing_pipeline.rayTraversalPrimitiveCulling = VK_TRUE;
+      }
+    } else {
+      size_t offset = 0;
+      const FeatureStructInfo* info = FindFeatureStruct(feature, &offset);
+      if (info != nullptr) {
+        SetFeatureField(EnableFeatureStruct(*info, &extension_feature_types_,
+                                            &extension_features_, &exts),
+                        offset);
+      }
     }
   }
-  init_feature(
-      supports_.descriptor_indexing, features_.descriptor_indexing,
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT,
-      VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+  for (const auto& info : KnownFeatureStructs()) {
+    if (info.always_enabled &&
+        std::find(vk_.available_device_extensions.begin(),
+                  vk_.available_device_extensions.end(),
+                  info.extension) != vk_.available_device_extensions.end()) {
+      EnableFeatureStruct(info, &extension_feature_types_, &extension_features_,
+                          &exts);
+    }
+  }
+  for (auto it = extension_features_.rbegin(); it != extension_features_.rend();
+       ++it) {
+    VkBaseOutStructure header = {};
+    memcpy(&header, it->data(), sizeof(header));
+    header.pNext = static_cast<VkBaseOutStructure*>(pnext);
+    memcpy(it->data(), &header, sizeof(header));
+    pnext = it->data();
+  }
 
   // These extensions are required to support the raytracing pipeline.
   if (supports_.deferred_host_operations) {

@@ -71,6 +71,62 @@ with:
  * `AccelerationStructureFeaturesKHR.accelerationStructure`
  * `BufferDeviceAddressFeatures.bufferDeviceAddress`
  * `ShaderLongVectorFeaturesEXT.longVector`
+ * `RayQueryFeaturesKHR.rayQuery`
+ * `SubgroupSupportedStages.task`
+ * `SubgroupSupportedStages.mesh`
+ * `SubgroupSupportedStages.rayGeneration`
+ * `SubgroupSupportedStages.anyHit`
+ * `SubgroupSupportedStages.closestHit`
+ * `SubgroupSupportedStages.miss`
+ * `SubgroupSupportedStages.intersection`
+ * `SubgroupSupportedStages.callable`
+ * `RayTracingPipelineFeaturesKHR.rayTraversalPrimitiveCulling`
+ * `RayTracingPositionFetchFeaturesKHR.rayTracingPositionFetch`
+ * `RayTracingMaintenance1FeaturesKHR.rayTracingMaintenance1`
+ * `RayTracingMaintenance1FeaturesKHR.rayTracingPipelineTraceRaysIndirect2`
+ * `RayTracingMotionBlurFeaturesNV.rayTracingMotionBlur`
+ * `RayTracingMotionBlurFeaturesNV.rayTracingMotionBlurPipelineTraceRaysIndirect`
+ * `MeshShaderFeaturesEXT.taskShader`
+ * `MeshShaderFeaturesEXT.meshShader`
+ * `MeshShaderFeaturesEXT.multiviewMeshShader`
+ * `MeshShaderFeaturesEXT.primitiveFragmentShadingRateMeshShader`
+ * `MeshShaderFeaturesEXT.meshShaderQueries`
+ * `MeshShaderFeaturesNV.taskShader`
+ * `MeshShaderFeaturesNV.meshShader`
+ * `FragmentShadingRateFeaturesKHR.pipelineFragmentShadingRate`
+ * `FragmentShadingRateFeaturesKHR.primitiveFragmentShadingRate`
+ * `FragmentShadingRateFeaturesKHR.attachmentFragmentShadingRate`
+ * `DescriptorIndexingFeatures.shaderInputAttachmentArrayDynamicIndexing`
+ * `DescriptorIndexingFeatures.shaderUniformTexelBufferArrayDynamicIndexing`
+ * `DescriptorIndexingFeatures.shaderStorageTexelBufferArrayDynamicIndexing`
+ * `DescriptorIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing`
+ * `DescriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing`
+ * `DescriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing`
+ * `DescriptorIndexingFeatures.shaderStorageImageArrayNonUniformIndexing`
+ * `DescriptorIndexingFeatures.shaderInputAttachmentArrayNonUniformIndexing`
+ * `DescriptorIndexingFeatures.shaderUniformTexelBufferArrayNonUniformIndexing`
+ * `DescriptorIndexingFeatures.shaderStorageTexelBufferArrayNonUniformIndexing`
+ * `DescriptorIndexingFeatures.descriptorBindingUniformBufferUpdateAfterBind`
+ * `DescriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind`
+ * `DescriptorIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind`
+ * `DescriptorIndexingFeatures.descriptorBindingStorageBufferUpdateAfterBind`
+ * `DescriptorIndexingFeatures.descriptorBindingUniformTexelBufferUpdateAfterBind`
+ * `DescriptorIndexingFeatures.descriptorBindingStorageTexelBufferUpdateAfterBind`
+ * `DescriptorIndexingFeatures.descriptorBindingUpdateUnusedWhilePending`
+ * `DescriptorIndexingFeatures.descriptorBindingPartiallyBound`
+ * `DescriptorIndexingFeatures.descriptorBindingVariableDescriptorCount`
+ * `DescriptorIndexingFeatures.runtimeDescriptorArray`
+ * `ShaderDemoteToHelperInvocationFeatures.shaderDemoteToHelperInvocation`
+ * `ShaderAtomicInt64Features.shaderBufferInt64Atomics`
+ * `ShaderAtomicInt64Features.shaderSharedInt64Atomics`
+
+A feature of an extension feature structure (such as `RayQueryFeaturesKHR`,
+`MeshShaderFeaturesEXT` or `DescriptorIndexingFeatures`) also enables the
+device extension that defines the structure. `DescriptorIndexingFeatures` is
+always chained when the device supports `VK_EXT_descriptor_indexing`.
+Bottom level acceleration structures are built with
+`VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_DATA_ACCESS_BIT_KHR` when
+`RayTracingPositionFetchFeaturesKHR.rayTracingPositionFetch` is requested.
 
 Extensions can be enabled with the `DEVICE_EXTENSION` and `INSTANCE_EXTENSION`
 commands.
@@ -163,11 +219,15 @@ SHADER {shader_type} {shader_name} {shader_format} [ TARGET_ENV {target_env} ] (
  * `miss`
  * `intersection`
  * `callable`
+ * `task`
+ * `mesh`
  * `multi`
 
 The compute pipeline can only contain compute shaders. The graphics pipeline
 can not contain compute shaders, and must contain a vertex shader and a fragment
-shader. Ray tracing pipeline can contain only shaders of ray tracing types:
+shader, or a mesh shader, an optional task shader and a fragment shader. A mesh
+shading pipeline can not contain vertex, tessellation or geometry shaders, has
+no vertex input and is run with `DRAW_MESH_TASKS`. Ray tracing pipeline can contain only shaders of ray tracing types:
 ray generation, any hit, closest hit, miss, intersection, and callable shaders.
 
 The provided `multi` shader can only be used with `SPIRV-ASM`, `SPIRV-HEX`, and
@@ -593,10 +653,16 @@ them directly. With the shader groups defined, they are then added into shader b
 ```groovy
   # Create shader binding tables and set shader groups into it
   SHADER_BINDING_TABLE {sbt_name}
-    {group_name_1}
-    [ | {group_name_n}]
+    {group_name_1} [SHADER_RECORD {buffer_name}]
+    [ | {group_name_n} [SHADER_RECORD {buffer_name}]]
   END
 ```
+
+A record can carry shader record data with `SHADER_RECORD`: the bytes of the
+buffer |buffer_name| are written after the shader group handle, where shaders
+read them through a `shaderRecordEXT` buffer block. All records of a shader
+binding table share one stride, the group handle size plus the largest record
+data, aligned to `shaderGroupHandleAlignment`.
 
 Generally a program needs three shader binding tables:
  * ray generation shader binding table with one ray generation shader group
@@ -1062,6 +1128,15 @@ RUN [TIMED_EXECUTION] {pipeline_name} DRAW_ARRAY AS {topology} INDEXED \
     [ COUNT _count_value_ (default index_buffer size - start_idx) ] \
     [ START_INSTANCE _inst_value_ (default 0) ] \
     [ INSTANCE_COUNT _inst_count_value_ (default 1) ]
+```
+
+```groovy
+# Run the |pipeline_name| which must be a `graphics` pipeline with a mesh
+# shader. The task shader, or the mesh shader when there is no task shader, is
+# dispatched with |x| * |y| * |z| workgroups (vkCmdDrawMeshTasksEXT). With
+# `MeshShaderFeaturesNV` features and no `MeshShaderFeaturesEXT` features,
+# vkCmdDrawMeshTasksNV is used and |y| and |z| must be 1.
+RUN [TIMED_EXECUTION] {pipeline_name} DRAW_MESH_TASKS _x_ _y_ _z_
 ```
 
 ```groovy

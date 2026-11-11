@@ -174,6 +174,9 @@ Result Executor::ExecuteCommand(Engine* engine, Command* cmd) {
   if (cmd->IsDrawArrays()) {
     return engine->DoDrawArrays(cmd->AsDrawArrays());
   }
+  if (cmd->IsDrawMeshTasks()) {
+    return engine->DoDrawMeshTasks(cmd->AsDrawMeshTasks());
+  }
   if (cmd->IsCompute()) {
     return engine->DoCompute(cmd->AsCompute());
   }

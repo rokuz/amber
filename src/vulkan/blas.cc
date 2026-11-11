@@ -112,7 +112,10 @@ Result BLAS::CreateBLAS(amber::BLAS* blas) {
       VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
       nullptr,
       VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
-      0u,
+      device_->IsRayTracingPositionFetchEnabled()
+          ? static_cast<VkBuildAccelerationStructureFlagsKHR>(
+                VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_DATA_ACCESS_BIT_KHR)
+          : 0u,
       VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR,
       VK_NULL_HANDLE,
       VK_NULL_HANDLE,

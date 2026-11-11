@@ -183,6 +183,10 @@ class EngineStub : public Engine {
     return Result("traceray stub not implemented");
   }
 
+  Result DoDrawMeshTasks(const DrawMeshTasksCommand*) override {
+    return Result("draw mesh tasks stub not implemented");
+  }
+
  private:
   bool fail_clear_command_ = false;
   bool fail_clear_color_command_ = false;

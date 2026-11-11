@@ -33,10 +33,16 @@ class SBT {
 
   Result Create(amber::SBT* sbt, VkPipeline pipeline);
   TransferBuffer* getBuffer() { return buffer_.get(); }
+  VkDeviceAddress GetDeviceAddress() const { return address_; }
+  VkDeviceSize GetStride() const { return stride_; }
+  VkDeviceSize GetSize() const { return size_; }
 
  private:
   Device* device_ = nullptr;
   std::unique_ptr<TransferBuffer> buffer_;
+  VkDeviceAddress address_ = 0;
+  VkDeviceSize stride_ = 0;
+  VkDeviceSize size_ = 0;
 };
 
 }  // namespace vulkan

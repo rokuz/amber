@@ -853,6 +853,134 @@ RUN my_pipeline DRAW_GRID POS 2 4 SIZE 10 20 CELLS 4 4 EXTRA)";
   ASSERT_EQ("12: extra parameters after RUN command: EXTRA", r.Error());
 }
 
+TEST_F(AmberScriptParserTest, RunDrawMeshTasks) {
+  std::string in = R"(
+SHADER task my_task GLSL
+# GLSL Shader
+END
+SHADER mesh my_mesh GLSL
+# GLSL Shader
+END
+SHADER fragment my_fragment GLSL
+# GLSL Shader
+END
+BUFFER my_fb FORMAT R32G32B32A32_SFLOAT
+
+PIPELINE graphics my_pipeline
+  ATTACH my_task
+  ATTACH my_mesh
+  ATTACH my_fragment
+  BIND BUFFER my_fb AS color LOCATION 0
+END
+
+RUN my_pipeline DRAW_MESH_TASKS 2 3 4)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+
+  auto script = parser.GetScript();
+  const auto& commands = script->GetCommands();
+  ASSERT_EQ(1U, commands.size());
+  ASSERT_TRUE(commands[0]->IsDrawMeshTasks());
+
+  auto* cmd = commands[0]->AsDrawMeshTasks();
+  EXPECT_EQ(2U, cmd->GetX());
+  EXPECT_EQ(3U, cmd->GetY());
+  EXPECT_EQ(4U, cmd->GetZ());
+  EXPECT_FALSE(cmd->IsTimedExecution());
+}
+
+TEST_F(AmberScriptParserTest, RunDrawMeshTasksTimed) {
+  std::string in = R"(
+SHADER mesh my_mesh GLSL
+# GLSL Shader
+END
+SHADER fragment my_fragment GLSL
+# GLSL Shader
+END
+BUFFER my_fb FORMAT R32G32B32A32_SFLOAT
+
+PIPELINE graphics my_pipeline
+  ATTACH my_mesh
+  ATTACH my_fragment
+  BIND BUFFER my_fb AS color LOCATION 0
+END
+
+RUN TIMED_EXECUTION my_pipeline DRAW_MESH_TASKS 1 1 1)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+
+  auto script = parser.GetScript();
+  const auto& commands = script->GetCommands();
+  ASSERT_EQ(1U, commands.size());
+  ASSERT_TRUE(commands[0]->IsDrawMeshTasks());
+  EXPECT_TRUE(commands[0]->AsDrawMeshTasks()->IsTimedExecution());
+}
+
+TEST_F(AmberScriptParserTest, RunDrawMeshTasksRequiresMeshShader) {
+  std::string in = R"(
+SHADER vertex my_shader PASSTHROUGH
+SHADER fragment my_fragment GLSL
+# GLSL Shader
+END
+
+PIPELINE graphics my_pipeline
+  ATTACH my_shader
+  ATTACH my_fragment
+END
+
+RUN my_pipeline DRAW_MESH_TASKS 1 1 1)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ("12: RUN DRAW_MESH_TASKS requires a mesh shader", r.Error());
+}
+
+TEST_F(AmberScriptParserTest, RunDrawMeshTasksMissingCount) {
+  std::string in = R"(
+SHADER mesh my_mesh GLSL
+# GLSL Shader
+END
+SHADER fragment my_fragment GLSL
+# GLSL Shader
+END
+
+PIPELINE graphics my_pipeline
+  ATTACH my_mesh
+  ATTACH my_fragment
+END
+
+RUN my_pipeline DRAW_MESH_TASKS 1 1)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ("14: invalid parameter for RUN DRAW_MESH_TASKS command: ",
+            r.Error());
+}
+
+TEST_F(AmberScriptParserTest, RunDrawMeshTasksComputePipeline) {
+  std::string in = R"(
+SHADER compute my_shader GLSL
+# GLSL Shader
+END
+
+PIPELINE compute my_pipeline
+  ATTACH my_shader
+END
+
+RUN my_pipeline DRAW_MESH_TASKS 1 1 1)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ("10: RUN command requires graphics pipeline", r.Error());
+}
+
 TEST_F(AmberScriptParserTest, RunDrawArrays) {
   std::string in = R"(
 SHADER vertex my_shader PASSTHROUGH

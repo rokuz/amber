@@ -95,6 +95,18 @@ const char kSubgroupSupportedStagesFragment[] =
     "SubgroupSupportedStages.fragment";
 const char kSubgroupSupportedStagesCompute[] =
     "SubgroupSupportedStages.compute";
+const char kSubgroupSupportedStagesTask[] = "SubgroupSupportedStages.task";
+const char kSubgroupSupportedStagesMesh[] = "SubgroupSupportedStages.mesh";
+const char kSubgroupSupportedStagesRayGeneration[] =
+    "SubgroupSupportedStages.rayGeneration";
+const char kSubgroupSupportedStagesAnyHit[] = "SubgroupSupportedStages.anyHit";
+const char kSubgroupSupportedStagesClosestHit[] =
+    "SubgroupSupportedStages.closestHit";
+const char kSubgroupSupportedStagesMiss[] = "SubgroupSupportedStages.miss";
+const char kSubgroupSupportedStagesIntersection[] =
+    "SubgroupSupportedStages.intersection";
+const char kSubgroupSupportedStagesCallable[] =
+    "SubgroupSupportedStages.callable";
 
 const char kShaderSubgroupExtendedTypes[] =
     "ShaderSubgroupExtendedTypesFeatures.shaderSubgroupExtendedTypes";
@@ -110,6 +122,10 @@ const char kBufferDeviceAddress[] =
 const char kRayTracingPipeline[] =
     "RayTracingPipelineFeaturesKHR.rayTracingPipeline";
 const char kRayQuery[] = "RayQueryFeaturesKHR.rayQuery";
+const char kRayTracingPositionFetch[] =
+    "RayTracingPositionFetchFeaturesKHR.rayTracingPositionFetch";
+const char kMeshShaderEXTPrefix[] = "MeshShaderFeaturesEXT.";
+const char kMeshShaderNVPrefix[] = "MeshShaderFeaturesNV.";
 
 struct BaseOutStructure {
   VkStructureType sType;
@@ -973,7 +989,32 @@ Result Device::Initialize(
     ptrs_.vkGetPhysicalDeviceProperties2(physical_device_, &properties2);
 
     shader_group_handle_size_ = rt_pipeline_properties.shaderGroupHandleSize;
+    shader_group_handle_alignment_ =
+        rt_pipeline_properties.shaderGroupHandleAlignment;
+    shader_group_base_alignment_ =
+        rt_pipeline_properties.shaderGroupBaseAlignment;
+    max_shader_group_stride_ = rt_pipeline_properties.maxShaderGroupStride;
   }
+
+  bool needs_mesh_shader_ext = false;
+  bool needs_mesh_shader_nv = false;
+  for (const auto& feature : required_features) {
+    if (feature.rfind(kMeshShaderEXTPrefix, 0) == 0) {
+      needs_mesh_shader_ext = true;
+    } else if (feature.rfind(kMeshShaderNVPrefix, 0) == 0) {
+      needs_mesh_shader_nv = true;
+    }
+  }
+  if (needs_mesh_shader_ext && ptrs_.vkCmdDrawMeshTasksEXT == nullptr) {
+    return Result("vkCmdDrawMeshTasksEXT is required, but not provided");
+  }
+  if (needs_mesh_shader_nv && ptrs_.vkCmdDrawMeshTasksNV == nullptr) {
+    return Result("vkCmdDrawMeshTasksNV is required, but not provided");
+  }
+  mesh_shader_nv_ = needs_mesh_shader_nv && !needs_mesh_shader_ext;
+  ray_tracing_position_fetch_ =
+      std::find(required_features.begin(), required_features.end(),
+                kRayTracingPositionFetch) != required_features.end();
 
   VkPhysicalDeviceVulkan12Properties* pv12 = nullptr;
   VkPhysicalDeviceFloatControlsProperties* pfc = nullptr;
@@ -1196,6 +1237,28 @@ Result Device::Initialize(
             !(subgroup_supported_stages & VK_SHADER_STAGE_COMPUTE_BIT)) {
           return amber::Result(
               "Subgroup operations not supported for compute shader stage");
+        }
+        const std::pair<const char*, VkShaderStageFlags> extra_stages[] = {
+            {kSubgroupSupportedStagesTask, VK_SHADER_STAGE_TASK_BIT_EXT},
+            {kSubgroupSupportedStagesMesh, VK_SHADER_STAGE_MESH_BIT_EXT},
+            {kSubgroupSupportedStagesRayGeneration,
+             VK_SHADER_STAGE_RAYGEN_BIT_KHR},
+            {kSubgroupSupportedStagesAnyHit, VK_SHADER_STAGE_ANY_HIT_BIT_KHR},
+            {kSubgroupSupportedStagesClosestHit,
+             VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR},
+            {kSubgroupSupportedStagesMiss, VK_SHADER_STAGE_MISS_BIT_KHR},
+            {kSubgroupSupportedStagesIntersection,
+             VK_SHADER_STAGE_INTERSECTION_BIT_KHR},
+            {kSubgroupSupportedStagesCallable,
+             VK_SHADER_STAGE_CALLABLE_BIT_KHR},
+        };
+        for (const auto& stage : extra_stages) {
+          if (feature == stage.first &&
+              !(subgroup_supported_stages & stage.second)) {
+            return amber::Result("Subgroup operations not supported for " +
+                                 feature.substr(feature.find('.') + 1) +
+                                 " shader stage");
+          }
         }
       }
     }
@@ -1696,6 +1759,12 @@ bool Device::IsRequiredSubgroupSizeSupported(
     case kShaderTypeCompute:
       stage = VK_SHADER_STAGE_COMPUTE_BIT;
       break;
+    case kShaderTypeTask:
+      stage = VK_SHADER_STAGE_TASK_BIT_EXT;
+      break;
+    case kShaderTypeMesh:
+      stage = VK_SHADER_STAGE_MESH_BIT_EXT;
+      break;
     default:
       return false;
   }
@@ -1724,6 +1793,18 @@ uint32_t Device::GetMaxSubgroupSize() const {
 
 uint32_t Device::GetRayTracingShaderGroupHandleSize() const {
   return shader_group_handle_size_;
+}
+
+uint32_t Device::GetRayTracingShaderGroupHandleAlignment() const {
+  return shader_group_handle_alignment_;
+}
+
+uint32_t Device::GetRayTracingShaderGroupBaseAlignment() const {
+  return shader_group_base_alignment_;
+}
+
+uint32_t Device::GetRayTracingMaxShaderGroupStride() const {
+  return max_shader_group_stride_;
 }
 
 }  // namespace vulkan

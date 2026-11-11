@@ -136,6 +136,14 @@ bool Script::IsKnownFeature(const std::string& name) const {
          name == "SubgroupSupportedStages.geometry" ||
          name == "SubgroupSupportedStages.fragment" ||
          name == "SubgroupSupportedStages.compute" ||
+         name == "SubgroupSupportedStages.task" ||
+         name == "SubgroupSupportedStages.mesh" ||
+         name == "SubgroupSupportedStages.rayGeneration" ||
+         name == "SubgroupSupportedStages.anyHit" ||
+         name == "SubgroupSupportedStages.closestHit" ||
+         name == "SubgroupSupportedStages.miss" ||
+         name == "SubgroupSupportedStages.intersection" ||
+         name == "SubgroupSupportedStages.callable" ||
          name == "IndexTypeUint8Features.indexTypeUint8" ||
          name ==
              "ShaderSubgroupExtendedTypesFeatures"
@@ -145,6 +153,93 @@ bool Script::IsKnownFeature(const std::string& name) const {
          name == "RayQueryFeaturesKHR.rayQuery" ||
          name == "AccelerationStructureFeaturesKHR.accelerationStructure" ||
          name == "BufferDeviceAddressFeatures.bufferDeviceAddress" ||
+         name == "RayTracingPipelineFeaturesKHR.rayTraversalPrimitiveCulling" ||
+         name == "RayTracingPositionFetchFeaturesKHR.rayTracingPositionFetch" ||
+         name == "RayTracingMaintenance1FeaturesKHR.rayTracingMaintenance1" ||
+         name ==
+             "RayTracingMaintenance1FeaturesKHR."
+             "rayTracingPipelineTraceRaysIndirect2" ||
+         name == "RayTracingMotionBlurFeaturesNV.rayTracingMotionBlur" ||
+         name ==
+             "RayTracingMotionBlurFeaturesNV."
+             "rayTracingMotionBlurPipelineTraceRaysIndirect" ||
+         name == "MeshShaderFeaturesEXT.taskShader" ||
+         name == "MeshShaderFeaturesEXT.meshShader" ||
+         name == "MeshShaderFeaturesEXT.multiviewMeshShader" ||
+         name ==
+             "MeshShaderFeaturesEXT."
+             "primitiveFragmentShadingRateMeshShader" ||
+         name == "MeshShaderFeaturesEXT.meshShaderQueries" ||
+         name == "MeshShaderFeaturesNV.taskShader" ||
+         name == "MeshShaderFeaturesNV.meshShader" ||
+         name == "FragmentShadingRateFeaturesKHR.pipelineFragmentShadingRate" ||
+         name ==
+             "FragmentShadingRateFeaturesKHR."
+             "primitiveFragmentShadingRate" ||
+         name ==
+             "FragmentShadingRateFeaturesKHR."
+             "attachmentFragmentShadingRate" ||
+         name ==
+             "DescriptorIndexingFeatures."
+             "shaderInputAttachmentArrayDynamicIndexing" ||
+         name ==
+             "DescriptorIndexingFeatures."
+             "shaderUniformTexelBufferArrayDynamicIndexing" ||
+         name ==
+             "DescriptorIndexingFeatures."
+             "shaderStorageTexelBufferArrayDynamicIndexing" ||
+         name ==
+             "DescriptorIndexingFeatures."
+             "shaderUniformBufferArrayNonUniformIndexing" ||
+         name ==
+             "DescriptorIndexingFeatures."
+             "shaderSampledImageArrayNonUniformIndexing" ||
+         name ==
+             "DescriptorIndexingFeatures."
+             "shaderStorageBufferArrayNonUniformIndexing" ||
+         name ==
+             "DescriptorIndexingFeatures."
+             "shaderStorageImageArrayNonUniformIndexing" ||
+         name ==
+             "DescriptorIndexingFeatures."
+             "shaderInputAttachmentArrayNonUniformIndexing" ||
+         name ==
+             "DescriptorIndexingFeatures."
+             "shaderUniformTexelBufferArrayNonUniformIndexing" ||
+         name ==
+             "DescriptorIndexingFeatures."
+             "shaderStorageTexelBufferArrayNonUniformIndexing" ||
+         name ==
+             "DescriptorIndexingFeatures."
+             "descriptorBindingUniformBufferUpdateAfterBind" ||
+         name ==
+             "DescriptorIndexingFeatures."
+             "descriptorBindingSampledImageUpdateAfterBind" ||
+         name ==
+             "DescriptorIndexingFeatures."
+             "descriptorBindingStorageImageUpdateAfterBind" ||
+         name ==
+             "DescriptorIndexingFeatures."
+             "descriptorBindingStorageBufferUpdateAfterBind" ||
+         name ==
+             "DescriptorIndexingFeatures."
+             "descriptorBindingUniformTexelBufferUpdateAfterBind" ||
+         name ==
+             "DescriptorIndexingFeatures."
+             "descriptorBindingStorageTexelBufferUpdateAfterBind" ||
+         name ==
+             "DescriptorIndexingFeatures."
+             "descriptorBindingUpdateUnusedWhilePending" ||
+         name == "DescriptorIndexingFeatures.descriptorBindingPartiallyBound" ||
+         name ==
+             "DescriptorIndexingFeatures."
+             "descriptorBindingVariableDescriptorCount" ||
+         name == "DescriptorIndexingFeatures.runtimeDescriptorArray" ||
+         name ==
+             "ShaderDemoteToHelperInvocationFeatures."
+             "shaderDemoteToHelperInvocation" ||
+         name == "ShaderAtomicInt64Features.shaderBufferInt64Atomics" ||
+         name == "ShaderAtomicInt64Features.shaderSharedInt64Atomics" ||
          name == "ShaderLongVectorFeaturesEXT.longVector";
 }
 

@@ -1122,6 +1122,94 @@ PIPELINE raytracing my_rtpipeline
   EXPECT_EQ("4: Identifier expected", r.Error());
 }
 
+TEST_F(AmberScriptParserTest, RayTracingPipelineSBTShaderRecord) {
+  std::string in = R"(
+SHADER ray_generation raygen1 GLSL
+  #version 460 core
+  void main() {}
+END
+SHADER miss miss1 GLSL
+  #version 460 core
+  void main() {}
+END
+BUFFER record1 DATA_TYPE uint32 DATA 1 2 3 END
+
+PIPELINE raytracing my_rtpipeline
+  SHADER_GROUP g1 raygen1
+  SHADER_GROUP g2 miss1
+  SHADER_BINDING_TABLE sbt1
+    g1 SHADER_RECORD record1
+  END
+  SHADER_BINDING_TABLE sbt2
+    g2
+  END
+END
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+
+  auto script = parser.GetScript();
+  const auto& pipelines = script->GetPipelines();
+  ASSERT_EQ(1U, pipelines.size());
+
+  auto* sbt1 = pipelines[0]->GetSBT("sbt1");
+  ASSERT_TRUE(sbt1 != nullptr);
+  ASSERT_EQ(1U, sbt1->GetSBTRecordCount());
+  auto* record = sbt1->GetSBTRecords()[0].get();
+  EXPECT_EQ("g1", record->GetUsedShaderGroupName());
+  ASSERT_TRUE(record->GetShaderRecordBuffer() != nullptr);
+  EXPECT_EQ("record1", record->GetShaderRecordBuffer()->GetName());
+
+  auto* sbt2 = pipelines[0]->GetSBT("sbt2");
+  ASSERT_TRUE(sbt2 != nullptr);
+  ASSERT_EQ(1U, sbt2->GetSBTRecordCount());
+  EXPECT_TRUE(sbt2->GetSBTRecords()[0]->GetShaderRecordBuffer() == nullptr);
+}
+
+TEST_F(AmberScriptParserTest, RayTracingPipelineSBTShaderRecordNoBuffer) {
+  std::string in = R"(
+SHADER ray_generation raygen1 GLSL
+  #version 460 core
+  void main() {}
+END
+
+PIPELINE raytracing my_rtpipeline
+  SHADER_GROUP g1 raygen1
+  SHADER_BINDING_TABLE sbt1
+    g1 SHADER_RECORD
+  END
+END
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ("11: SHADER_RECORD requires a buffer name", r.Error());
+}
+
+TEST_F(AmberScriptParserTest, RayTracingPipelineSBTShaderRecordUnknownBuffer) {
+  std::string in = R"(
+SHADER ray_generation raygen1 GLSL
+  #version 460 core
+  void main() {}
+END
+
+PIPELINE raytracing my_rtpipeline
+  SHADER_GROUP g1 raygen1
+  SHADER_BINDING_TABLE sbt1
+    g1 SHADER_RECORD missing
+  END
+END
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ("10: unknown buffer for SHADER_RECORD: missing", r.Error());
+}
+
 TEST_F(AmberScriptParserTest, RayTracingRun) {
   std::string in = R"(
 SHADER ray_generation raygen1 GLSL

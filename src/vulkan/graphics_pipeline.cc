@@ -639,11 +639,15 @@ Result GraphicsPipeline::CreateVkGraphicsPipeline(
 
   auto shader_stage_info = GetVkShaderStageInfo();
   bool is_tessellation_needed = false;
+  bool is_mesh_shading = false;
   for (auto& info : shader_stage_info) {
     info.pName = GetEntryPointName(info.stage);
     if (info.stage == VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT ||
         info.stage == VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT) {
       is_tessellation_needed = true;
+    }
+    if (info.stage == VK_SHADER_STAGE_MESH_BIT_EXT) {
+      is_mesh_shading = true;
     }
   }
 
@@ -683,8 +687,10 @@ Result GraphicsPipeline::CreateVkGraphicsPipeline(
   pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
   pipeline_info.stageCount = static_cast<uint32_t>(shader_stage_info.size());
   pipeline_info.pStages = shader_stage_info.data();
-  pipeline_info.pVertexInputState = &vertex_input_info;
-  pipeline_info.pInputAssemblyState = &input_assembly_info;
+  pipeline_info.pVertexInputState =
+      is_mesh_shading ? nullptr : &vertex_input_info;
+  pipeline_info.pInputAssemblyState =
+      is_mesh_shading ? nullptr : &input_assembly_info;
   pipeline_info.pViewportState = &viewport_info;
   pipeline_info.pMultisampleState = &multisampleInfo;
 
@@ -911,6 +917,77 @@ Result GraphicsPipeline::Clear() {
 Result GraphicsPipeline::Draw(const DrawArraysCommand* command,
                               VertexBuffer* vertex_buffer,
                               bool is_timed_execution) {
+  return RecordDraw(
+      command->GetPipelineData(), ToVkTopology(command->GetTopology()),
+      vertex_buffer, is_timed_execution, [&]() -> Result {
+        if (vertex_buffer != nullptr) {
+          vertex_buffer->BindToCommandBuffer(command_.get());
+        }
+
+        if (command->IsIndexed()) {
+          if (!index_buffer_) {
+            return Result("Vulkan: Draw indexed is used without given indices");
+          }
+
+          Result r = index_buffer_->BindToCommandBuffer(command_.get());
+          if (!r.IsSuccess()) {
+            return r;
+          }
+
+          // VkRunner spec says
+          //   "vertexCount will be used as the index count, firstVertex
+          //    becomes the vertex offset and firstIndex will always be zero."
+
+          device_->GetPtrs()->vkCmdDrawIndexed(
+              command_->GetVkCommandBuffer(),
+              command->GetVertexCount(),   /* indexCount */
+              command->GetInstanceCount(), /* instanceCount */
+              0,                           /* firstIndex */
+              static_cast<int32_t>(
+                  command->GetFirstVertexIndex()), /* vertexOffset */
+              command->GetFirstInstance());        /* firstInstance */
+        } else {
+          device_->GetPtrs()->vkCmdDraw(
+              command_->GetVkCommandBuffer(), command->GetVertexCount(),
+              command->GetInstanceCount(), command->GetFirstVertexIndex(),
+              command->GetFirstInstance());
+        }
+        return {};
+      });
+}
+
+Result GraphicsPipeline::DrawMeshTasks(const DrawMeshTasksCommand* command,
+                                       bool is_timed_execution) {
+  return RecordDraw(
+      command->GetPipelineData(), VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, nullptr,
+      is_timed_execution, [&]() -> Result {
+        if (device_->IsMeshShaderNV()) {
+          if (command->GetY() != 1 || command->GetZ() != 1) {
+            return Result(
+                "Vulkan: NV mesh shaders take a one-dimensional task count");
+          }
+          if (device_->GetPtrs()->vkCmdDrawMeshTasksNV == nullptr) {
+            return Result("vkCmdDrawMeshTasksNV is required, but not provided");
+          }
+          device_->GetPtrs()->vkCmdDrawMeshTasksNV(
+              command_->GetVkCommandBuffer(), command->GetX(), 0);
+          return {};
+        }
+        if (device_->GetPtrs()->vkCmdDrawMeshTasksEXT == nullptr) {
+          return Result("vkCmdDrawMeshTasksEXT is required, but not provided");
+        }
+        device_->GetPtrs()->vkCmdDrawMeshTasksEXT(
+            command_->GetVkCommandBuffer(), command->GetX(), command->GetY(),
+            command->GetZ());
+        return {};
+      });
+}
+
+Result GraphicsPipeline::RecordDraw(const PipelineData* pipeline_data,
+                                    VkPrimitiveTopology topology,
+                                    VertexBuffer* vertex_buffer,
+                                    bool is_timed_execution,
+                                    const std::function<Result()>& record) {
   Result r = SendDescriptorDataToDeviceIfNeeded();
   if (!r.IsSuccess()) {
     return r;
@@ -923,9 +1000,8 @@ Result GraphicsPipeline::Draw(const DrawArraysCommand* command,
   }
 
   VkPipeline pipeline = VK_NULL_HANDLE;
-  r = CreateVkGraphicsPipeline(command->GetPipelineData(),
-                               ToVkTopology(command->GetTopology()),
-                               vertex_buffer, pipeline_layout, &pipeline);
+  r = CreateVkGraphicsPipeline(pipeline_data, topology, vertex_buffer,
+                               pipeline_layout, &pipeline);
   if (!r.IsSuccess()) {
     return r;
   }
@@ -975,37 +1051,9 @@ Result GraphicsPipeline::Draw(const DrawArraysCommand* command,
                                             VK_PIPELINE_BIND_POINT_GRAPHICS,
                                             pipeline);
 
-      if (vertex_buffer != nullptr) {
-        vertex_buffer->BindToCommandBuffer(command_.get());
-      }
-
-      if (command->IsIndexed()) {
-        if (!index_buffer_) {
-          return Result("Vulkan: Draw indexed is used without given indices");
-        }
-
-        r = index_buffer_->BindToCommandBuffer(command_.get());
-        if (!r.IsSuccess()) {
-          return r;
-        }
-
-        // VkRunner spec says
-        //   "vertexCount will be used as the index count, firstVertex
-        //    becomes the vertex offset and firstIndex will always be zero."
-
-        device_->GetPtrs()->vkCmdDrawIndexed(
-            command_->GetVkCommandBuffer(),
-            command->GetVertexCount(),   /* indexCount */
-            command->GetInstanceCount(), /* instanceCount */
-            0,                           /* firstIndex */
-            static_cast<int32_t>(
-                command->GetFirstVertexIndex()), /* vertexOffset */
-            command->GetFirstInstance());        /* firstInstance */
-      } else {
-        device_->GetPtrs()->vkCmdDraw(
-            command_->GetVkCommandBuffer(), command->GetVertexCount(),
-            command->GetInstanceCount(), command->GetFirstVertexIndex(),
-            command->GetFirstInstance());
+      r = record();
+      if (!r.IsSuccess()) {
+        return r;
       }
     }
     EndTimerQuery();

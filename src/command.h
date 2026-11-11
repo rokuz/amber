@@ -43,6 +43,7 @@ class CopyCommand;
 class DrawArraysCommand;
 class DrawRectCommand;
 class DrawGridCommand;
+class DrawMeshTasksCommand;
 class EntryPointCommand;
 class PatchParameterVerticesCommand;
 class Pipeline;
@@ -66,6 +67,7 @@ class Command {
     kDrawArrays,
     kDrawRect,
     kDrawGrid,
+    kDrawMeshTasks,
     kEntryPoint,
     kPatchParameterVertices,
     kPipelineProperties,
@@ -85,6 +87,7 @@ class Command {
   bool IsDrawRect() const { return command_type_ == Type::kDrawRect; }
   bool IsDrawGrid() const { return command_type_ == Type::kDrawGrid; }
   bool IsDrawArrays() const { return command_type_ == Type::kDrawArrays; }
+  bool IsDrawMeshTasks() const { return command_type_ == Type::kDrawMeshTasks; }
   bool IsCompareBuffer() const { return command_type_ == Type::kCompareBuffer; }
   bool IsCompute() const { return command_type_ == Type::kCompute; }
   bool IsRayTracing() const { return command_type_ == Type::kRayTracing; }
@@ -114,6 +117,7 @@ class Command {
   DrawArraysCommand* AsDrawArrays();
   DrawRectCommand* AsDrawRect();
   DrawGridCommand* AsDrawGrid();
+  DrawMeshTasksCommand* AsDrawMeshTasks();
   EntryPointCommand* AsEntryPoint();
   PatchParameterVerticesCommand* AsPatchParameterVertices();
   ProbeCommand* AsProbe();
@@ -264,6 +268,32 @@ class DrawArraysCommand : public PipelineCommand {
   uint32_t vertex_count_ = 0;
   uint32_t first_instance_ = 0;
   uint32_t instance_count_ = 1;
+};
+
+/// Command to draw mesh tasks with a mesh shading pipeline.
+class DrawMeshTasksCommand : public PipelineCommand {
+ public:
+  DrawMeshTasksCommand(Pipeline* pipeline, PipelineData data);
+  ~DrawMeshTasksCommand() override;
+
+  const PipelineData* GetPipelineData() const { return &data_; }
+
+  void SetX(uint32_t x) { x_ = x; }
+  uint32_t GetX() const { return x_; }
+
+  void SetY(uint32_t y) { y_ = y; }
+  uint32_t GetY() const { return y_; }
+
+  void SetZ(uint32_t z) { z_ = z; }
+  uint32_t GetZ() const { return z_; }
+
+  std::string ToString() const override { return "DrawMeshTasksCommand"; }
+
+ private:
+  PipelineData data_;
+  uint32_t x_ = 0;
+  uint32_t y_ = 0;
+  uint32_t z_ = 0;
 };
 
 /// A command to compare two buffers.

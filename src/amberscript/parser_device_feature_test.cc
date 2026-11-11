@@ -74,6 +74,184 @@ DEVICE_FEATURE ShaderLongVectorFeaturesEXT.longVector)";
   EXPECT_EQ("ShaderLongVectorFeaturesEXT.longVector", features[17]);
 }
 
+TEST_F(AmberScriptParserTest, DeviceFeatureExtensionStructs) {
+  std::string in = R"(
+DEVICE_FEATURE RayTracingPipelineFeaturesKHR.rayTraversalPrimitiveCulling
+DEVICE_FEATURE RayTracingPositionFetchFeaturesKHR.rayTracingPositionFetch
+DEVICE_FEATURE RayTracingMaintenance1FeaturesKHR.rayTracingMaintenance1
+DEVICE_FEATURE RayTracingMaintenance1FeaturesKHR.rayTracingPipelineTraceRaysIndirect2
+DEVICE_FEATURE RayTracingMotionBlurFeaturesNV.rayTracingMotionBlur
+DEVICE_FEATURE RayTracingMotionBlurFeaturesNV.rayTracingMotionBlurPipelineTraceRaysIndirect
+DEVICE_FEATURE MeshShaderFeaturesEXT.taskShader
+DEVICE_FEATURE MeshShaderFeaturesEXT.meshShader
+DEVICE_FEATURE MeshShaderFeaturesEXT.multiviewMeshShader
+DEVICE_FEATURE MeshShaderFeaturesEXT.primitiveFragmentShadingRateMeshShader
+DEVICE_FEATURE MeshShaderFeaturesEXT.meshShaderQueries
+DEVICE_FEATURE MeshShaderFeaturesNV.taskShader
+DEVICE_FEATURE MeshShaderFeaturesNV.meshShader
+DEVICE_FEATURE FragmentShadingRateFeaturesKHR.pipelineFragmentShadingRate
+DEVICE_FEATURE FragmentShadingRateFeaturesKHR.primitiveFragmentShadingRate
+DEVICE_FEATURE FragmentShadingRateFeaturesKHR.attachmentFragmentShadingRate
+DEVICE_FEATURE DescriptorIndexingFeatures.shaderInputAttachmentArrayDynamicIndexing
+DEVICE_FEATURE DescriptorIndexingFeatures.shaderUniformTexelBufferArrayDynamicIndexing
+DEVICE_FEATURE DescriptorIndexingFeatures.shaderStorageTexelBufferArrayDynamicIndexing
+DEVICE_FEATURE DescriptorIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing
+DEVICE_FEATURE DescriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing
+DEVICE_FEATURE DescriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing
+DEVICE_FEATURE DescriptorIndexingFeatures.shaderStorageImageArrayNonUniformIndexing
+DEVICE_FEATURE DescriptorIndexingFeatures.shaderInputAttachmentArrayNonUniformIndexing
+DEVICE_FEATURE DescriptorIndexingFeatures.shaderUniformTexelBufferArrayNonUniformIndexing
+DEVICE_FEATURE DescriptorIndexingFeatures.shaderStorageTexelBufferArrayNonUniformIndexing
+DEVICE_FEATURE DescriptorIndexingFeatures.descriptorBindingUniformBufferUpdateAfterBind
+DEVICE_FEATURE DescriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind
+DEVICE_FEATURE DescriptorIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind
+DEVICE_FEATURE DescriptorIndexingFeatures.descriptorBindingStorageBufferUpdateAfterBind
+DEVICE_FEATURE DescriptorIndexingFeatures.descriptorBindingUniformTexelBufferUpdateAfterBind
+DEVICE_FEATURE DescriptorIndexingFeatures.descriptorBindingStorageTexelBufferUpdateAfterBind
+DEVICE_FEATURE DescriptorIndexingFeatures.descriptorBindingUpdateUnusedWhilePending
+DEVICE_FEATURE DescriptorIndexingFeatures.descriptorBindingPartiallyBound
+DEVICE_FEATURE DescriptorIndexingFeatures.descriptorBindingVariableDescriptorCount
+DEVICE_FEATURE DescriptorIndexingFeatures.runtimeDescriptorArray
+DEVICE_FEATURE ShaderDemoteToHelperInvocationFeatures.shaderDemoteToHelperInvocation
+DEVICE_FEATURE ShaderAtomicInt64Features.shaderBufferInt64Atomics
+DEVICE_FEATURE ShaderAtomicInt64Features.shaderSharedInt64Atomics)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+
+  auto script = parser.GetScript();
+  const auto& features = script->GetRequiredFeatures();
+  ASSERT_EQ(39U, features.size());
+  EXPECT_EQ("RayTracingPipelineFeaturesKHR.rayTraversalPrimitiveCulling",
+            features[0]);
+  EXPECT_EQ("RayTracingPositionFetchFeaturesKHR.rayTracingPositionFetch",
+            features[1]);
+  EXPECT_EQ("RayTracingMaintenance1FeaturesKHR.rayTracingMaintenance1",
+            features[2]);
+  EXPECT_EQ(
+      "RayTracingMaintenance1FeaturesKHR."
+      "rayTracingPipelineTraceRaysIndirect2",
+      features[3]);
+  EXPECT_EQ("RayTracingMotionBlurFeaturesNV.rayTracingMotionBlur", features[4]);
+  EXPECT_EQ(
+      "RayTracingMotionBlurFeaturesNV."
+      "rayTracingMotionBlurPipelineTraceRaysIndirect",
+      features[5]);
+  EXPECT_EQ("MeshShaderFeaturesEXT.taskShader", features[6]);
+  EXPECT_EQ("MeshShaderFeaturesEXT.meshShader", features[7]);
+  EXPECT_EQ("MeshShaderFeaturesEXT.multiviewMeshShader", features[8]);
+  EXPECT_EQ("MeshShaderFeaturesEXT.primitiveFragmentShadingRateMeshShader",
+            features[9]);
+  EXPECT_EQ("MeshShaderFeaturesEXT.meshShaderQueries", features[10]);
+  EXPECT_EQ("MeshShaderFeaturesNV.taskShader", features[11]);
+  EXPECT_EQ("MeshShaderFeaturesNV.meshShader", features[12]);
+  EXPECT_EQ("FragmentShadingRateFeaturesKHR.pipelineFragmentShadingRate",
+            features[13]);
+  EXPECT_EQ("FragmentShadingRateFeaturesKHR.primitiveFragmentShadingRate",
+            features[14]);
+  EXPECT_EQ("FragmentShadingRateFeaturesKHR.attachmentFragmentShadingRate",
+            features[15]);
+  EXPECT_EQ(
+      "DescriptorIndexingFeatures."
+      "shaderInputAttachmentArrayDynamicIndexing",
+      features[16]);
+  EXPECT_EQ(
+      "DescriptorIndexingFeatures."
+      "shaderUniformTexelBufferArrayDynamicIndexing",
+      features[17]);
+  EXPECT_EQ(
+      "DescriptorIndexingFeatures."
+      "shaderStorageTexelBufferArrayDynamicIndexing",
+      features[18]);
+  EXPECT_EQ(
+      "DescriptorIndexingFeatures."
+      "shaderUniformBufferArrayNonUniformIndexing",
+      features[19]);
+  EXPECT_EQ(
+      "DescriptorIndexingFeatures."
+      "shaderSampledImageArrayNonUniformIndexing",
+      features[20]);
+  EXPECT_EQ(
+      "DescriptorIndexingFeatures."
+      "shaderStorageBufferArrayNonUniformIndexing",
+      features[21]);
+  EXPECT_EQ(
+      "DescriptorIndexingFeatures."
+      "shaderStorageImageArrayNonUniformIndexing",
+      features[22]);
+  EXPECT_EQ(
+      "DescriptorIndexingFeatures."
+      "shaderInputAttachmentArrayNonUniformIndexing",
+      features[23]);
+  EXPECT_EQ(
+      "DescriptorIndexingFeatures."
+      "shaderUniformTexelBufferArrayNonUniformIndexing",
+      features[24]);
+  EXPECT_EQ(
+      "DescriptorIndexingFeatures."
+      "shaderStorageTexelBufferArrayNonUniformIndexing",
+      features[25]);
+  EXPECT_EQ(
+      "DescriptorIndexingFeatures."
+      "descriptorBindingUniformBufferUpdateAfterBind",
+      features[26]);
+  EXPECT_EQ(
+      "DescriptorIndexingFeatures."
+      "descriptorBindingSampledImageUpdateAfterBind",
+      features[27]);
+  EXPECT_EQ(
+      "DescriptorIndexingFeatures."
+      "descriptorBindingStorageImageUpdateAfterBind",
+      features[28]);
+  EXPECT_EQ(
+      "DescriptorIndexingFeatures."
+      "descriptorBindingStorageBufferUpdateAfterBind",
+      features[29]);
+  EXPECT_EQ(
+      "DescriptorIndexingFeatures."
+      "descriptorBindingUniformTexelBufferUpdateAfterBind",
+      features[30]);
+  EXPECT_EQ(
+      "DescriptorIndexingFeatures."
+      "descriptorBindingStorageTexelBufferUpdateAfterBind",
+      features[31]);
+  EXPECT_EQ(
+      "DescriptorIndexingFeatures."
+      "descriptorBindingUpdateUnusedWhilePending",
+      features[32]);
+  EXPECT_EQ("DescriptorIndexingFeatures.descriptorBindingPartiallyBound",
+            features[33]);
+  EXPECT_EQ(
+      "DescriptorIndexingFeatures."
+      "descriptorBindingVariableDescriptorCount",
+      features[34]);
+  EXPECT_EQ("DescriptorIndexingFeatures.runtimeDescriptorArray", features[35]);
+  EXPECT_EQ(
+      "ShaderDemoteToHelperInvocationFeatures."
+      "shaderDemoteToHelperInvocation",
+      features[36]);
+  EXPECT_EQ("ShaderAtomicInt64Features.shaderBufferInt64Atomics", features[37]);
+  EXPECT_EQ("ShaderAtomicInt64Features.shaderSharedInt64Atomics", features[38]);
+}
+
+TEST_F(AmberScriptParserTest, DeviceFeatureSubgroupStages) {
+  std::string in = R"(
+DEVICE_FEATURE SubgroupSupportedStages.task
+DEVICE_FEATURE SubgroupSupportedStages.mesh
+DEVICE_FEATURE SubgroupSupportedStages.rayGeneration
+DEVICE_FEATURE SubgroupSupportedStages.anyHit
+DEVICE_FEATURE SubgroupSupportedStages.closestHit
+DEVICE_FEATURE SubgroupSupportedStages.miss
+DEVICE_FEATURE SubgroupSupportedStages.intersection
+DEVICE_FEATURE SubgroupSupportedStages.callable)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+  EXPECT_EQ(8U, parser.GetScript()->GetRequiredFeatures().size());
+}
+
 TEST_F(AmberScriptParserTest, DeviceFeatureMissingFeature) {
   std::string in = "DEVICE_FEATURE";
 

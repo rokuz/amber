@@ -17,6 +17,7 @@
 
 #include <vulkan/vulkan.h>
 
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <string>
@@ -127,7 +128,6 @@ class ConfigHelperVulkan : public ConfigHelperImpl {
     bool acceleration_structure = false;
     bool buffer_device_address = false;
     bool ray_tracing_pipeline = false;
-    bool descriptor_indexing = false;
     bool deferred_host_operations = false;
     bool spirv_1_4 = false;
     bool shader_float_controls = false;
@@ -151,7 +151,6 @@ class ConfigHelperVulkan : public ConfigHelperImpl {
     VkPhysicalDeviceAccelerationStructureFeaturesKHR acceleration_structure{};
     VkPhysicalDeviceBufferDeviceAddressFeatures buffer_device_address{};
     VkPhysicalDeviceRayTracingPipelineFeaturesKHR ray_tracing_pipeline{};
-    VkPhysicalDeviceDescriptorIndexingFeatures descriptor_indexing{};
     VkPhysicalDeviceVulkanMemoryModelFeatures memory_model_structure{};
     VkPhysicalDeviceZeroInitializeWorkgroupMemoryFeaturesKHR
         zero_initialize_workgroup_memory_features{};
@@ -160,6 +159,9 @@ class ConfigHelperVulkan : public ConfigHelperImpl {
     VkPhysicalDeviceShaderLongVectorFeaturesEXT shader_long_vector{};
 #endif
   } features_;
+
+  std::vector<VkStructureType> extension_feature_types_;
+  std::vector<std::vector<uint64_t>> extension_features_;
 };
 
 }  // namespace sample

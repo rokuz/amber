@@ -231,7 +231,72 @@ TEST_F(PipelineTest, GraphicsPipelineMissingVertexShader) {
 
   r = p.Validate();
   EXPECT_FALSE(r.IsSuccess()) << r.Error();
-  EXPECT_EQ("graphics pipeline requires a vertex shader", r.Error());
+  EXPECT_EQ("graphics pipeline requires a vertex or a mesh shader", r.Error());
+}
+
+TEST_F(PipelineTest, GraphicsPipelineWithTaskAndMeshShaders) {
+  Shader t(kShaderTypeTask);
+  Shader m(kShaderTypeMesh);
+  Shader f(kShaderTypeFragment);
+
+  Pipeline p(PipelineType::kGraphics);
+  SetupColorAttachment(&p, 0);
+
+  Result r = p.AddShader(&t, kShaderTypeTask);
+  EXPECT_TRUE(r.IsSuccess()) << r.Error();
+
+  r = p.AddShader(&m, kShaderTypeMesh);
+  EXPECT_TRUE(r.IsSuccess()) << r.Error();
+
+  r = p.AddShader(&f, kShaderTypeFragment);
+  EXPECT_TRUE(r.IsSuccess()) << r.Error();
+
+  r = p.Validate();
+  EXPECT_TRUE(r.IsSuccess()) << r.Error();
+}
+
+TEST_F(PipelineTest, GraphicsPipelineTaskShaderRequiresMeshShader) {
+  Shader t(kShaderTypeTask);
+  Shader f(kShaderTypeFragment);
+
+  Pipeline p(PipelineType::kGraphics);
+  SetupColorAttachment(&p, 0);
+
+  Result r = p.AddShader(&t, kShaderTypeTask);
+  EXPECT_TRUE(r.IsSuccess()) << r.Error();
+
+  r = p.AddShader(&f, kShaderTypeFragment);
+  EXPECT_TRUE(r.IsSuccess()) << r.Error();
+
+  r = p.Validate();
+  EXPECT_FALSE(r.IsSuccess());
+  EXPECT_EQ("graphics pipeline with a task shader requires a mesh shader",
+            r.Error());
+}
+
+TEST_F(PipelineTest, GraphicsPipelineMeshShaderWithVertexShader) {
+  Shader v(kShaderTypeVertex);
+  Shader m(kShaderTypeMesh);
+  Shader f(kShaderTypeFragment);
+
+  Pipeline p(PipelineType::kGraphics);
+  SetupColorAttachment(&p, 0);
+
+  Result r = p.AddShader(&v, kShaderTypeVertex);
+  EXPECT_TRUE(r.IsSuccess()) << r.Error();
+
+  r = p.AddShader(&m, kShaderTypeMesh);
+  EXPECT_TRUE(r.IsSuccess()) << r.Error();
+
+  r = p.AddShader(&f, kShaderTypeFragment);
+  EXPECT_TRUE(r.IsSuccess()) << r.Error();
+
+  r = p.Validate();
+  EXPECT_FALSE(r.IsSuccess());
+  EXPECT_EQ(
+      "graphics pipeline can not mix a mesh shader with vertex, tessellation "
+      "or geometry shaders",
+      r.Error());
 }
 
 TEST_F(PipelineTest, ComputePipelineRequiresComputeShader) {

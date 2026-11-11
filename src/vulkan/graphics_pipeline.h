@@ -15,6 +15,7 @@
 #ifndef SRC_VULKAN_GRAPHICS_PIPELINE_H_
 #define SRC_VULKAN_GRAPHICS_PIPELINE_H_
 
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -64,6 +65,8 @@ class GraphicsPipeline : public Pipeline {
   Result Draw(const DrawArraysCommand* command,
               VertexBuffer* vertex_buffer,
               bool is_timed_execution);
+  Result DrawMeshTasks(const DrawMeshTasksCommand* command,
+                       bool is_timed_execution);
 
   VkRenderPass GetVkRenderPass() const { return render_pass_; }
   FrameBuffer* GetFrameBuffer() const { return frame_.get(); }
@@ -85,6 +88,11 @@ class GraphicsPipeline : public Pipeline {
                                   const VkPipelineLayout& pipeline_layout,
                                   VkPipeline* pipeline);
   Result CreateRenderPass();
+  Result RecordDraw(const PipelineData* pipeline_data,
+                    VkPrimitiveTopology topology,
+                    VertexBuffer* vertex_buffer,
+                    bool is_timed_execution,
+                    const std::function<Result()>& record);
   Result SendVertexBufferDataIfNeeded(VertexBuffer* vertex_buffer);
 
   VkPipelineDepthStencilStateCreateInfo GetVkPipelineDepthStencilInfo(

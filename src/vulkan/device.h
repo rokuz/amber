@@ -93,6 +93,19 @@ class Device {
   uint32_t GetMaxSubgroupSize() const;
   /// Returns ray tracing shader group handle size.
   uint32_t GetRayTracingShaderGroupHandleSize() const;
+  /// Returns the required alignment of ray tracing shader group handles.
+  uint32_t GetRayTracingShaderGroupHandleAlignment() const;
+  /// Returns the required alignment of shader binding table base addresses.
+  uint32_t GetRayTracingShaderGroupBaseAlignment() const;
+  /// Returns the maximum stride of a shader binding table record.
+  uint32_t GetRayTracingMaxShaderGroupStride() const;
+  /// Returns true if mesh shading uses VK_NV_mesh_shader.
+  bool IsMeshShaderNV() const { return mesh_shader_nv_; }
+  /// Returns true if bottom level acceleration structures allow fetching
+  /// their vertex positions.
+  bool IsRayTracingPositionFetchEnabled() const {
+    return ray_tracing_position_fetch_;
+  }
 
   // Returns true if we have support for timestamps.
   bool IsTimestampComputeAndGraphicsSupported() const;
@@ -117,6 +130,11 @@ class Device {
   VkQueue queue_ = VK_NULL_HANDLE;
   uint32_t queue_family_index_ = 0;
   uint32_t shader_group_handle_size_ = 0;
+  uint32_t shader_group_handle_alignment_ = 0;
+  uint32_t shader_group_base_alignment_ = 0;
+  uint32_t max_shader_group_stride_ = 0;
+  bool mesh_shader_nv_ = false;
+  bool ray_tracing_position_fetch_ = false;
 
   VulkanPtrs ptrs_;
 

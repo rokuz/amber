@@ -46,6 +46,8 @@ enum ShaderType {
   kShaderTypeMiss,
   kShaderTypeIntersection,
   kShaderTypeCall,
+  kShaderTypeTask,
+  kShaderTypeMesh,
   kShaderTypeMulti,
 };
 
@@ -53,6 +55,10 @@ inline bool isRayTracingShaderType(ShaderType type) {
   return type == kShaderTypeRayGeneration || type == kShaderTypeAnyHit ||
          type == kShaderTypeClosestHit || type == kShaderTypeMiss ||
          type == kShaderTypeIntersection || type == kShaderTypeCall;
+}
+
+inline bool isMeshShadingShaderType(ShaderType type) {
+  return type == kShaderTypeTask || type == kShaderTypeMesh;
 }
 
 /// Stores information for a shader.

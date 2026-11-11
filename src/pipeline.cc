@@ -330,16 +330,36 @@ Result Pipeline::ValidateGraphics() const {
   }
 
   bool found_vertex = false;
+  bool found_mesh = false;
+  bool found_task = false;
+  bool found_vertex_stage = false;
   for (const auto& info : shaders_) {
-    const auto* s = info.GetShader();
-    if (s->GetType() == kShaderTypeVertex) {
+    const auto type = info.GetShaderType();
+    if (type == kShaderTypeVertex) {
       found_vertex = true;
-      break;
+    } else if (type == kShaderTypeMesh) {
+      found_mesh = true;
+    } else if (type == kShaderTypeTask) {
+      found_task = true;
+    }
+    if (type == kShaderTypeVertex || type == kShaderTypeGeometry ||
+        type == kShaderTypeTessellationControl ||
+        type == kShaderTypeTessellationEvaluation) {
+      found_vertex_stage = true;
     }
   }
 
-  if (!found_vertex) {
-    return Result("graphics pipeline requires a vertex shader");
+  if (found_mesh && found_vertex_stage) {
+    return Result(
+        "graphics pipeline can not mix a mesh shader with vertex, "
+        "tessellation or geometry shaders");
+  }
+  if (found_task && !found_mesh) {
+    return Result(
+        "graphics pipeline with a task shader requires a mesh shader");
+  }
+  if (!found_vertex && !found_mesh) {
+    return Result("graphics pipeline requires a vertex or a mesh shader");
   }
 
   for (const auto& att : color_attachments_) {

@@ -37,17 +37,6 @@ inline VkStridedDeviceAddressRegionKHR makeStridedDeviceAddressRegionKHR(
   return res;
 }
 
-inline VkDeviceAddress getBufferDeviceAddress(Device* device, VkBuffer buffer) {
-  const VkBufferDeviceAddressInfo bufferDeviceAddressInfo = {
-      VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR,
-      nullptr,
-      buffer,
-  };
-
-  return device->GetPtrs()->vkGetBufferDeviceAddress(device->GetVkDevice(),
-                                                     &bufferDeviceAddressInfo);
-}
-
 RayTracingPipeline::RayTracingPipeline(
     Device* device,
     BlasesMap* blases,
@@ -130,7 +119,6 @@ Result RayTracingPipeline::getVulkanSBTRegion(
     VkPipeline pipeline,
     amber::SBT* aSBT,
     VkStridedDeviceAddressRegionKHR* region) {
-  const uint32_t handle_size = device_->GetRayTracingShaderGroupHandleSize();
   if (aSBT != nullptr) {
     SBT* vSBT = nullptr;
     auto x = sbtses_.find(aSBT);
@@ -151,8 +139,7 @@ Result RayTracingPipeline::getVulkanSBTRegion(
     }
 
     *region = makeStridedDeviceAddressRegionKHR(
-        getBufferDeviceAddress(device_, vSBT->getBuffer()->GetVkBuffer()),
-        handle_size, handle_size * aSBT->GetSBTSize());
+        vSBT->GetDeviceAddress(), vSBT->GetStride(), vSBT->GetSize());
   } else {
     *region = makeStridedDeviceAddressRegionKHR(0, 0, 0);
   }

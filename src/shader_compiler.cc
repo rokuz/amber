@@ -265,6 +265,10 @@ Result ShaderCompiler::CompileGlsl(const Shader* shader,
     kind = shaderc_intersection_shader;
   } else if (shader->GetType() == kShaderTypeCall) {
     kind = shaderc_callable_shader;
+  } else if (shader->GetType() == kShaderTypeTask) {
+    kind = shaderc_task_shader;
+  } else if (shader->GetType() == kShaderTypeMesh) {
+    kind = shaderc_mesh_shader;
   } else {
     return Result("Unknown shader type");
   }
