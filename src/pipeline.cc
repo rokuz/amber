@@ -70,6 +70,8 @@ std::unique_ptr<Pipeline> Pipeline::Clone() const {
   clone->shaders_ = shaders_;
   clone->color_attachments_ = color_attachments_;
   clone->resolve_targets_ = resolve_targets_;
+  clone->transform_feedback_buffers_ = transform_feedback_buffers_;
+  clone->input_attachments_ = input_attachments_;
   clone->vertex_buffers_ = vertex_buffers_;
   clone->buffers_ = buffers_;
   clone->buffer_addresses_ = buffer_addresses_;
@@ -77,6 +79,7 @@ std::unique_ptr<Pipeline> Pipeline::Clone() const {
   clone->index_buffer_ = index_buffer_;
   clone->fb_width_ = fb_width_;
   clone->fb_height_ = fb_height_;
+  clone->view_count_ = view_count_;
   clone->set_arg_values_ = set_arg_values_;
   clone->pipeline_data_ = pipeline_data_;
 
@@ -287,17 +290,19 @@ Result Pipeline::SetShaderType(const Shader* shader, ShaderType type) {
 }
 
 Result Pipeline::Validate() const {
+  const uint32_t layers = view_count_ > 0 ? view_count_ : 1;
   for (const auto& attachment : color_attachments_) {
     if (attachment.buffer->ElementCount() !=
         (fb_width_ << attachment.base_mip_level) *
-            (fb_height_ << attachment.base_mip_level)) {
+            (fb_height_ << attachment.base_mip_level) * layers) {
       return Result(
           "shared framebuffer must have same size over all PIPELINES");
     }
   }
 
   if (depth_stencil_buffer_.buffer &&
-      depth_stencil_buffer_.buffer->ElementCount() != fb_width_ * fb_height_) {
+      depth_stencil_buffer_.buffer->ElementCount() !=
+          fb_width_ * fb_height_ * layers) {
     return Result("shared depth buffer must have same size over all PIPELINES");
   }
 
@@ -363,6 +368,28 @@ Result Pipeline::ValidateGraphics() const {
     return Result("graphics pipeline requires a vertex or a mesh shader");
   }
 
+  if (view_count_ > 0) {
+    if (!input_attachments_.empty() || !resolve_targets_.empty()) {
+      return Result(
+          "MULTIVIEW pipelines can not have input attachments or resolve "
+          "targets");
+    }
+    for (const auto& att : color_attachments_) {
+      if (att.buffer->GetMipLevels() != 1) {
+        return Result("MULTIVIEW color attachments must have one mip level");
+      }
+    }
+  }
+
+  for (const auto& att : input_attachments_) {
+    if (att.buffer->GetWidth() != fb_width_ ||
+        att.buffer->GetHeight() != fb_height_ || att.buffer->GetDepth() != 1 ||
+        att.buffer->GetLayers() != 1 || att.buffer->GetMipLevels() != 1) {
+      return Result("input attachment " + att.buffer->GetName() +
+                    " must be a single 2D image of the framebuffer size");
+    }
+  }
+
   for (const auto& att : color_attachments_) {
     auto width = att.buffer->GetWidth();
     auto height = att.buffer->GetHeight();
@@ -396,7 +423,8 @@ Result Pipeline::ValidateCompute() const {
 }
 
 void Pipeline::UpdateFramebufferSizes() {
-  uint32_t size = fb_width_ * fb_height_;
+  const uint32_t layers = view_count_ > 0 ? view_count_ : 1;
+  uint32_t size = fb_width_ * fb_height_ * layers;
   if (size == 0) {
     return;
   }
@@ -406,12 +434,14 @@ void Pipeline::UpdateFramebufferSizes() {
     auto mip0_height = fb_height_ << attachment.base_mip_level;
     attachment.buffer->SetWidth(mip0_width);
     attachment.buffer->SetHeight(mip0_height);
-    attachment.buffer->SetElementCount(mip0_width * mip0_height);
+    attachment.buffer->SetLayers(layers);
+    attachment.buffer->SetElementCount(mip0_width * mip0_height * layers);
   }
 
   if (depth_stencil_buffer_.buffer) {
     depth_stencil_buffer_.buffer->SetWidth(fb_width_);
     depth_stencil_buffer_.buffer->SetHeight(fb_height_);
+    depth_stencil_buffer_.buffer->SetLayers(layers);
     depth_stencil_buffer_.buffer->SetElementCount(size);
   }
 }
@@ -436,9 +466,11 @@ Result Pipeline::AddColorAttachment(Buffer* buf,
   info.base_mip_level = base_mip_level;
   auto mip0_width = fb_width_ << base_mip_level;
   auto mip0_height = fb_height_ << base_mip_level;
+  const uint32_t layers = view_count_ > 0 ? view_count_ : 1;
   buf->SetWidth(mip0_width);
   buf->SetHeight(mip0_height);
-  buf->SetElementCount(mip0_width * mip0_height);
+  buf->SetLayers(layers);
+  buf->SetElementCount(mip0_width * mip0_height * layers);
 
   return {};
 }
@@ -452,6 +484,46 @@ Result Pipeline::AddResolveTarget(Buffer* buf) {
   buf->SetHeight(fb_height_);
   buf->SetElementCount(fb_width_ * fb_height_);
 
+  return {};
+}
+
+Result Pipeline::AddTransformFeedbackBuffer(Buffer* buf, uint32_t xfb_buffer) {
+  for (const auto& info : transform_feedback_buffers_) {
+    if (info.location == xfb_buffer) {
+      return Result("transform feedback buffer " + std::to_string(xfb_buffer) +
+                    " is bound twice");
+    }
+  }
+  if (buf->GetSizeInBytes() == 0) {
+    return Result("transform feedback buffer " + buf->GetName() +
+                  " is empty");
+  }
+  transform_feedback_buffers_.push_back(BufferInfo{buf});
+  auto& info = transform_feedback_buffers_.back();
+  info.type = BufferType::kTransformFeedback;
+  info.location = xfb_buffer;
+  return {};
+}
+
+Result Pipeline::AddInputAttachment(Buffer* buf,
+                                    uint32_t index,
+                                    uint32_t descriptor_set,
+                                    uint32_t binding) {
+  for (const auto& info : input_attachments_) {
+    if (info.location == index && info.buffer != buf) {
+      return Result("input attachment " + std::to_string(index) +
+                    " is bound to two images");
+    }
+  }
+  if (buf->GetFormat() == nullptr) {
+    return Result("input attachment " + buf->GetName() + " has no format");
+  }
+  input_attachments_.push_back(BufferInfo{buf});
+  auto& info = input_attachments_.back();
+  info.type = BufferType::kInputAttachment;
+  info.location = index;
+  info.descriptor_set = descriptor_set;
+  info.binding = binding;
   return {};
 }
 
@@ -474,9 +546,11 @@ Result Pipeline::SetDepthStencilBuffer(Buffer* buf) {
   depth_stencil_buffer_.buffer = buf;
   depth_stencil_buffer_.type = BufferType::kDepthStencil;
 
+  const uint32_t layers = view_count_ > 0 ? view_count_ : 1;
   buf->SetWidth(fb_width_);
   buf->SetHeight(fb_height_);
-  buf->SetElementCount(fb_width_ * fb_height_);
+  buf->SetLayers(layers);
+  buf->SetElementCount(fb_width_ * fb_height_ * layers);
   return {};
 }
 

@@ -157,7 +157,11 @@ DEVICE_FEATURE ShaderQuadControlFeaturesKHR.shaderQuadControl
 DEVICE_FEATURE FragmentShaderInterlockFeaturesEXT.fragmentShaderSampleInterlock
 DEVICE_FEATURE FragmentShaderInterlockFeaturesEXT.fragmentShaderPixelInterlock
 DEVICE_FEATURE FragmentShaderInterlockFeaturesEXT.fragmentShaderShadingRateInterlock
-DEVICE_FEATURE ShaderImageFootprintFeaturesNV.imageFootprint)";
+DEVICE_FEATURE ShaderImageFootprintFeaturesNV.imageFootprint
+DEVICE_FEATURE ShaderRelaxedExtendedInstructionFeaturesKHR.shaderRelaxedExtendedInstruction
+DEVICE_FEATURE FragmentDensityMapFeaturesEXT.fragmentDensityMap
+DEVICE_FEATURE ShadingRateImageFeaturesNV.shadingRateImage
+DEVICE_FEATURE ComputeShaderDerivativesPropertiesKHR.meshAndTaskShaderDerivatives)";
 
   Parser parser;
   Result r = parser.Parse(in);
@@ -165,7 +169,7 @@ DEVICE_FEATURE ShaderImageFootprintFeaturesNV.imageFootprint)";
 
   auto script = parser.GetScript();
   const auto& features = script->GetRequiredFeatures();
-  ASSERT_EQ(82U, features.size());
+  ASSERT_EQ(86U, features.size());
   EXPECT_EQ("RayTracingPipelineFeaturesKHR.rayTraversalPrimitiveCulling",
             features[0]);
   EXPECT_EQ("RayTracingPositionFetchFeaturesKHR.rayTracingPositionFetch",
@@ -354,6 +358,15 @@ DEVICE_FEATURE ShaderImageFootprintFeaturesNV.imageFootprint)";
       "FragmentShaderInterlockFeaturesEXT.fragmentShaderShadingRateInterlock",
       features[80]);
   EXPECT_EQ("ShaderImageFootprintFeaturesNV.imageFootprint", features[81]);
+  EXPECT_EQ(
+      "ShaderRelaxedExtendedInstructionFeaturesKHR."
+      "shaderRelaxedExtendedInstruction",
+      features[82]);
+  EXPECT_EQ("FragmentDensityMapFeaturesEXT.fragmentDensityMap", features[83]);
+  EXPECT_EQ("ShadingRateImageFeaturesNV.shadingRateImage", features[84]);
+  EXPECT_EQ(
+      "ComputeShaderDerivativesPropertiesKHR.meshAndTaskShaderDerivatives",
+      features[85]);
 }
 
 TEST_F(AmberScriptParserTest, DeviceFeatureSubgroupStages) {

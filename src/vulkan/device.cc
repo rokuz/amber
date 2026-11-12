@@ -127,6 +127,8 @@ const char kRayQuery[] = "RayQueryFeaturesKHR.rayQuery";
 const char kRayTracingPositionFetch[] =
     "RayTracingPositionFetchFeaturesKHR.rayTracingPositionFetch";
 const char kMeshShaderEXTPrefix[] = "MeshShaderFeaturesEXT.";
+const char kMeshAndTaskShaderDerivatives[] =
+    "ComputeShaderDerivativesPropertiesKHR.meshAndTaskShaderDerivatives";
 const char kMeshShaderNVPrefix[] = "MeshShaderFeaturesNV.";
 
 struct BaseOutStructure {
@@ -1034,6 +1036,22 @@ Result Device::Initialize(
     return Result("vkCmdDrawMeshTasksNV is required, but not provided");
   }
   mesh_shader_nv_ = needs_mesh_shader_nv && !needs_mesh_shader_ext;
+
+  if (std::find(required_features.begin(), required_features.end(),
+                kMeshAndTaskShaderDerivatives) != required_features.end()) {
+    VkPhysicalDeviceComputeShaderDerivativesPropertiesKHR derivatives = {};
+    derivatives.sType =
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_PROPERTIES_KHR;
+    VkPhysicalDeviceProperties2KHR properties2 = {};
+    properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    properties2.pNext = &derivatives;
+    ptrs_.vkGetPhysicalDeviceProperties2(physical_device_, &properties2);
+    if (derivatives.meshAndTaskShaderDerivatives != VK_TRUE) {
+      return Result(
+          "Missing compute shader derivatives in mesh and task shaders "
+          "(meshAndTaskShaderDerivatives)");
+    }
+  }
   ray_tracing_position_fetch_ =
       std::find(required_features.begin(), required_features.end(),
                 kRayTracingPositionFetch) != required_features.end();

@@ -269,6 +269,15 @@ class Pipeline {
   }
   uint32_t GetFramebufferHeight() const { return fb_height_; }
 
+  /// Renders |view_count| views with multiview: the subpass has the view mask
+  /// (1 << |view_count|) - 1 and every attachment has one layer per view. 0
+  /// renders without multiview.
+  void SetViewCount(uint32_t view_count) {
+    view_count_ = view_count;
+    UpdateFramebufferSizes();
+  }
+  uint32_t GetViewCount() const { return view_count_; }
+
   /// Adds |shader| of |type| to the pipeline.
   Result AddShader(Shader* shader, ShaderType type);
   /// Returns information on all bound shaders in this pipeline.
@@ -353,6 +362,27 @@ class Pipeline {
 
   /// Adds |buf| as a multisample resolve target in the pipeline.
   Result AddResolveTarget(Buffer* buf);
+
+  /// Returns the transform feedback buffers; |location| holds the transform
+  /// feedback buffer index.
+  const std::vector<BufferInfo>& GetTransformFeedbackBuffers() const {
+    return transform_feedback_buffers_;
+  }
+  /// Adds |buf| as the transform feedback buffer |xfb_buffer|.
+  Result AddTransformFeedbackBuffer(Buffer* buf, uint32_t xfb_buffer);
+
+  /// Returns the input attachment descriptor elements in the order they were
+  /// bound; |location| holds the input attachment index. Several descriptors
+  /// may read the same input attachment index, always from the same image.
+  const std::vector<BufferInfo>& GetInputAttachments() const {
+    return input_attachments_;
+  }
+  /// Adds the image |buf| as input attachment |index|, read through the input
+  /// attachment descriptor at |descriptor_set| and |binding|.
+  Result AddInputAttachment(Buffer* buf,
+                            uint32_t index,
+                            uint32_t descriptor_set,
+                            uint32_t binding);
 
   /// Sets |buf| as the depth/stencil buffer for this pipeline.
   Result SetDepthStencilBuffer(Buffer* buf);
@@ -598,6 +628,8 @@ class Pipeline {
   std::vector<BufferAddressInfo> buffer_addresses_;
   std::vector<BufferInfo> color_attachments_;
   std::vector<BufferInfo> resolve_targets_;
+  std::vector<BufferInfo> transform_feedback_buffers_;
+  std::vector<BufferInfo> input_attachments_;
   std::vector<BufferInfo> vertex_buffers_;
   std::vector<BufferInfo> buffers_;
   std::vector<std::unique_ptr<type::Type>> types_;
@@ -609,6 +641,7 @@ class Pipeline {
   PipelineData pipeline_data_;
   uint32_t fb_width_ = 250;
   uint32_t fb_height_ = 250;
+  uint32_t view_count_ = 0;
 
   std::vector<ArgSetInfo> set_arg_values_;
   std::vector<std::unique_ptr<Buffer>> opencl_pod_buffers_;

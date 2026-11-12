@@ -380,6 +380,29 @@ const std::vector<FeatureStructInfo>& KnownFeatureStructs() {
        false,
        {AMBER_FEATURE_FIELD(VkPhysicalDeviceShaderImageFootprintFeaturesNV,
                             imageFootprint)}},
+      {"ShaderRelaxedExtendedInstructionFeaturesKHR",
+       // NOLINTNEXTLINE(whitespace/line_length)
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_RELAXED_EXTENDED_INSTRUCTION_FEATURES_KHR,
+       VK_KHR_SHADER_RELAXED_EXTENDED_INSTRUCTION_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceShaderRelaxedExtendedInstructionFeaturesKHR),
+       false,
+       {AMBER_FEATURE_FIELD(
+           VkPhysicalDeviceShaderRelaxedExtendedInstructionFeaturesKHR,
+           shaderRelaxedExtendedInstruction)}},
+      {"FragmentDensityMapFeaturesEXT",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_FEATURES_EXT,
+       VK_EXT_FRAGMENT_DENSITY_MAP_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceFragmentDensityMapFeaturesEXT),
+       false,
+       {AMBER_FEATURE_FIELD(VkPhysicalDeviceFragmentDensityMapFeaturesEXT,
+                            fragmentDensityMap)}},
+      {"ShadingRateImageFeaturesNV",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADING_RATE_IMAGE_FEATURES_NV,
+       VK_NV_SHADING_RATE_IMAGE_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceShadingRateImageFeaturesNV),
+       false,
+       {AMBER_FEATURE_FIELD(VkPhysicalDeviceShadingRateImageFeaturesNV,
+                            shadingRateImage)}},
   };
   return kStructs;
 }

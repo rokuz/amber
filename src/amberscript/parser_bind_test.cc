@@ -3635,5 +3635,185 @@ END)";
   }
 }
 
+TEST_F(AmberScriptParserTest, BindTransformFeedback) {
+  std::string in = R"(
+SHADER vertex my_shader PASSTHROUGH
+SHADER fragment my_fragment GLSL
+# GLSL Shader
+END
+BUFFER my_fb FORMAT R32G32B32A32_SFLOAT
+BUFFER xfb0 DATA_TYPE uint32 SIZE 16 FILL 0
+BUFFER xfb3 DATA_TYPE uint32 SIZE 8 FILL 0
+
+PIPELINE graphics my_pipeline
+  ATTACH my_shader
+  ATTACH my_fragment
+  BIND BUFFER my_fb AS color LOCATION 0
+  BIND BUFFER xfb3 AS transform_feedback XFB_BUFFER 3
+  BIND BUFFER xfb0 AS transform_feedback XFB_BUFFER 0
+END)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+
+  auto script = parser.GetScript();
+  const auto* pipeline = script->GetPipelines()[0].get();
+  const auto& buffers = pipeline->GetTransformFeedbackBuffers();
+  ASSERT_EQ(2U, buffers.size());
+  EXPECT_EQ("xfb3", buffers[0].buffer->GetName());
+  EXPECT_EQ(3U, buffers[0].location);
+  EXPECT_EQ("xfb0", buffers[1].buffer->GetName());
+  EXPECT_EQ(0U, buffers[1].location);
+  EXPECT_EQ(BufferType::kTransformFeedback, buffers[1].type);
+}
+
+TEST_F(AmberScriptParserTest, BindTransformFeedbackInvalid) {
+  struct {
+    const char* bind;
+    const char* err;
+  } cases[] = {
+      {"BIND BUFFER xfb AS transform_feedback", "BIND missing XFB_BUFFER"},
+      {"BIND BUFFER xfb AS transform_feedback XFB_BUFFER a",
+       "invalid value for BIND XFB_BUFFER"},
+      {"BIND BUFFER xfb AS transform_feedback XFB_BUFFER 0\n  BIND BUFFER xfb "
+       "AS transform_feedback XFB_BUFFER 0",
+       "transform feedback buffer 0 is bound twice"},
+      {"BIND BUFFER_ARRAY xfb xfb AS transform_feedback XFB_BUFFER 0",
+       "transform feedback buffers are bound one by one"},
+  };
+  for (const auto& c : cases) {
+    std::string in = R"(
+SHADER vertex my_shader PASSTHROUGH
+SHADER fragment my_fragment GLSL
+# GLSL Shader
+END
+BUFFER xfb DATA_TYPE uint32 SIZE 16 FILL 0
+
+PIPELINE graphics my_pipeline
+  ATTACH my_shader
+  ATTACH my_fragment
+  )" + std::string(c.bind) +
+                     R"(
+END)";
+    Parser parser;
+    Result r = parser.Parse(in);
+    ASSERT_FALSE(r.IsSuccess()) << c.bind;
+    EXPECT_NE(std::string::npos, r.Error().find(c.err)) << r.Error();
+  }
+}
+
+TEST_F(AmberScriptParserTest, BindInputAttachments) {
+  std::string in = R"(
+SHADER vertex my_shader PASSTHROUGH
+SHADER fragment my_fragment GLSL
+# GLSL Shader
+END
+BUFFER my_fb FORMAT R32G32B32A32_SFLOAT
+IMAGE a FORMAT R32G32B32A32_SFLOAT DIM_2D WIDTH 4 HEIGHT 4 FILL 1.0
+IMAGE b FORMAT R32G32B32A32_SFLOAT DIM_2D WIDTH 4 HEIGHT 4 FILL 2.0
+IMAGE c FORMAT R32_UINT DIM_2D WIDTH 4 HEIGHT 4 FILL 3
+
+PIPELINE graphics my_pipeline
+  ATTACH my_shader
+  ATTACH my_fragment
+  FRAMEBUFFER_SIZE 4 4
+  BIND BUFFER my_fb AS color LOCATION 0
+  BIND BUFFER_ARRAY a b AS input_attachment INPUT_ATTACHMENT_INDEX 1 DESCRIPTOR_SET 0 BINDING 2
+  BIND BUFFER c AS input_attachment INPUT_ATTACHMENT_INDEX 0 DESCRIPTOR_SET 1 BINDING 0
+  BIND BUFFER b AS input_attachment INPUT_ATTACHMENT_INDEX 2 DESCRIPTOR_SET 1 BINDING 1
+END)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+
+  auto script = parser.GetScript();
+  const auto* pipeline = script->GetPipelines()[0].get();
+  const auto& inputs = pipeline->GetInputAttachments();
+  ASSERT_EQ(4U, inputs.size());
+  EXPECT_EQ("a", inputs[0].buffer->GetName());
+  EXPECT_EQ(1U, inputs[0].location);
+  EXPECT_EQ(0U, inputs[0].descriptor_set);
+  EXPECT_EQ(2U, inputs[0].binding);
+  EXPECT_EQ("b", inputs[1].buffer->GetName());
+  EXPECT_EQ(2U, inputs[1].location);
+  EXPECT_EQ(2U, inputs[1].binding);
+  EXPECT_EQ("c", inputs[2].buffer->GetName());
+  EXPECT_EQ(0U, inputs[2].location);
+  EXPECT_EQ(1U, inputs[2].descriptor_set);
+  EXPECT_EQ("b", inputs[3].buffer->GetName());
+  EXPECT_EQ(2U, inputs[3].location);
+}
+
+TEST_F(AmberScriptParserTest, BindInputAttachmentTwoImages) {
+  std::string in = R"(
+SHADER vertex my_shader PASSTHROUGH
+SHADER fragment my_fragment GLSL
+# GLSL Shader
+END
+BUFFER my_fb FORMAT R32G32B32A32_SFLOAT
+IMAGE a FORMAT R32G32B32A32_SFLOAT DIM_2D WIDTH 4 HEIGHT 4 FILL 1.0
+IMAGE b FORMAT R32G32B32A32_SFLOAT DIM_2D WIDTH 4 HEIGHT 4 FILL 2.0
+
+PIPELINE graphics my_pipeline
+  ATTACH my_shader
+  ATTACH my_fragment
+  FRAMEBUFFER_SIZE 4 4
+  BIND BUFFER my_fb AS color LOCATION 0
+  BIND BUFFER a AS input_attachment INPUT_ATTACHMENT_INDEX 0 DESCRIPTOR_SET 0 BINDING 0
+  BIND BUFFER b AS input_attachment INPUT_ATTACHMENT_INDEX 0 DESCRIPTOR_SET 0 BINDING 1
+END)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ("16: input attachment 0 is bound to two images", r.Error());
+}
+
+TEST_F(AmberScriptParserTest, BindInputAttachmentWrongSize) {
+  std::string in = R"(
+SHADER vertex my_shader PASSTHROUGH
+SHADER fragment my_fragment GLSL
+# GLSL Shader
+END
+BUFFER my_fb FORMAT R32G32B32A32_SFLOAT
+IMAGE a FORMAT R32G32B32A32_SFLOAT DIM_2D WIDTH 4 HEIGHT 4 FILL 1.0
+
+PIPELINE graphics my_pipeline
+  ATTACH my_shader
+  ATTACH my_fragment
+  FRAMEBUFFER_SIZE 8 8
+  BIND BUFFER my_fb AS color LOCATION 0
+  BIND BUFFER a AS input_attachment INPUT_ATTACHMENT_INDEX 0 DESCRIPTOR_SET 0 BINDING 0
+END)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ(
+      "input attachment a must be a single 2D image of the framebuffer size",
+      r.Error());
+}
+
+TEST_F(AmberScriptParserTest, BindInputAttachmentInCompute) {
+  std::string in = R"(
+SHADER compute my_shader GLSL
+# GLSL Shader
+END
+IMAGE a FORMAT R32G32B32A32_SFLOAT DIM_2D WIDTH 4 HEIGHT 4 FILL 1.0
+
+PIPELINE compute my_pipeline
+  ATTACH my_shader
+  BIND BUFFER a AS input_attachment INPUT_ATTACHMENT_INDEX 0 DESCRIPTOR_SET 0 BINDING 0
+END)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ("9: input attachments are only allowed in graphics pipelines",
+            r.Error());
+}
+
 }  // namespace amberscript
 }  // namespace amber

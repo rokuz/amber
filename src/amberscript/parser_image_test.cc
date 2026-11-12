@@ -261,6 +261,23 @@ IMAGE image DATA_TYPE uint32 DIM_2D WIDTH 3 HEIGHT 4 SAMPLES 4
 
   auto* buffer = buffers[0].get();
   EXPECT_EQ(4u, buffer->GetSamples());
+  EXPECT_EQ(48u, buffer->ElementCount());
+}
+
+TEST_F(AmberScriptParserTest, Image2DMultiSampleData) {
+  std::string in = R"(
+IMAGE image DATA_TYPE uint32 DIM_2D_ARRAY WIDTH 2 HEIGHT 1 LAYERS 2 SAMPLES 2 DATA
+1 2 3 4 5 6 7 8
+END
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+  auto script = parser.GetScript();
+  const auto& buffers = script->GetBuffers();
+  ASSERT_EQ(1U, buffers.size());
+  EXPECT_EQ(8u, buffers[0]->ElementCount());
 }
 
 TEST_F(AmberScriptParserTest, Image2DInvalidSampleValue) {
@@ -363,6 +380,79 @@ END
       "6: Elements provided in data does not match size specified: 8 specified "
       "vs 4 provided",
       r.Error());
+}
+
+TEST_F(AmberScriptParserTest, ImageArrayLayers) {
+  std::string in = R"(
+IMAGE image DATA_TYPE uint32 DIM_2D_ARRAY WIDTH 2 HEIGHT 1 LAYERS 3 DATA
+1 2 3 4 5 6
+END
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+
+  auto script = parser.GetScript();
+  const auto& buffers = script->GetBuffers();
+  ASSERT_EQ(1U, buffers.size());
+  auto* buffer = buffers[0].get();
+  EXPECT_EQ(ImageDimension::k2DArray, buffer->GetImageDimension());
+  EXPECT_EQ(3u, buffer->GetLayers());
+  EXPECT_EQ(6u, buffer->ElementCount());
+}
+
+TEST_F(AmberScriptParserTest, ImageCubeHasSixLayers) {
+  std::string in = R"(
+IMAGE cube DATA_TYPE float DIM_CUBE WIDTH 2 HEIGHT 2 FILL 1.0
+IMAGE cubes DATA_TYPE float DIM_CUBE_ARRAY WIDTH 2 HEIGHT 2 LAYERS 12 FILL 1.0
+IMAGE line DATA_TYPE float DIM_1D_ARRAY WIDTH 4 LAYERS 2 FILL 1.0
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+
+  auto script = parser.GetScript();
+  const auto& buffers = script->GetBuffers();
+  ASSERT_EQ(3U, buffers.size());
+  EXPECT_EQ(ImageDimension::kCube, buffers[0]->GetImageDimension());
+  EXPECT_EQ(6u, buffers[0]->GetLayers());
+  EXPECT_EQ(24u, buffers[0]->ElementCount());
+  EXPECT_EQ(ImageDimension::kCubeArray, buffers[1]->GetImageDimension());
+  EXPECT_EQ(12u, buffers[1]->GetLayers());
+  EXPECT_EQ(48u, buffers[1]->ElementCount());
+  EXPECT_EQ(ImageDimension::k1DArray, buffers[2]->GetImageDimension());
+  EXPECT_EQ(8u, buffers[2]->ElementCount());
+}
+
+TEST_F(AmberScriptParserTest, ImageLayersInvalid) {
+  struct {
+    const char* in;
+    const char* err;
+  } cases[] = {
+      {"IMAGE i DATA_TYPE float DIM_2D WIDTH 2 HEIGHT 2 LAYERS 2 FILL 1.0",
+       "1: IMAGE LAYERS is only allowed for DIM_1D_ARRAY, DIM_2D_ARRAY, "
+       "DIM_CUBE and DIM_CUBE_ARRAY"},
+      {"IMAGE i DATA_TYPE float DIM_CUBE WIDTH 2 HEIGHT 2 LAYERS 2 FILL 1.0",
+       "1: a DIM_CUBE IMAGE has 6 LAYERS"},
+      {"IMAGE i DATA_TYPE float DIM_CUBE_ARRAY WIDTH 2 HEIGHT 2 FILL 1.0",
+       "1: expected IMAGE LAYERS"},
+      {"IMAGE i DATA_TYPE float DIM_CUBE_ARRAY WIDTH 2 HEIGHT 2 LAYERS 7 FILL "
+       "1.0",
+       "1: IMAGE LAYERS of a DIM_CUBE_ARRAY must be a multiple of 6"},
+      {"IMAGE i DATA_TYPE float DIM_CUBE WIDTH 2 HEIGHT 4 FILL 1.0",
+       "1: IMAGE WIDTH and HEIGHT of a cube image must be equal"},
+      {"IMAGE i DATA_TYPE float DIM_2D_ARRAY WIDTH 2 HEIGHT 2 LAYERS 0 FILL 1.0",
+       "1: expected positive IMAGE LAYERS"},
+  };
+
+  for (const auto& c : cases) {
+    Parser parser;
+    Result r = parser.Parse(c.in);
+    ASSERT_FALSE(r.IsSuccess()) << c.in;
+    EXPECT_EQ(c.err, r.Error()) << c.in;
+  }
 }
 
 }  // namespace amberscript

@@ -749,6 +749,8 @@ Result Parser::ParsePipelineBody(const std::string& cmd_name,
       r = ParsePipelineSubgroup(pipeline.get());
     } else if (tok == "PATCH_CONTROL_POINTS") {
       r = ParsePipelinePatchControlPoints(pipeline.get());
+    } else if (tok == "MULTIVIEW") {
+      r = ParsePipelineMultiview(pipeline.get());
     } else if (tok == "BLEND") {
       r = ParsePipelineBlend(pipeline.get());
     } else if (tok == "ALPHA_TO_COVERAGE") {
@@ -1166,6 +1168,18 @@ Result Parser::ParsePipelinePatchControlPoints(Pipeline* pipeline) {
   return ValidateEndOfStatement("PATCH_CONTROL_POINTS command");
 }
 
+Result Parser::ParsePipelineMultiview(Pipeline* pipeline) {
+  if (!pipeline->IsGraphics()) {
+    return Result("MULTIVIEW only applies to graphics pipelines");
+  }
+  auto token = tokenizer_->NextToken();
+  if (!token->IsInteger() || token->AsUint32() == 0 || token->AsUint32() > 32) {
+    return Result("MULTIVIEW expects a view count from 1 to 32");
+  }
+  pipeline->SetViewCount(token->AsUint32());
+  return ValidateEndOfStatement("MULTIVIEW command");
+}
+
 Result Parser::ParsePipelineFramebufferSize(Pipeline* pipeline) {
   auto token = tokenizer_->NextToken();
   if (token->IsEOL() || token->IsEOS()) {
@@ -1296,6 +1310,10 @@ Result Parser::ToBufferType(const std::string& name, BufferType* type) {
     *type = BufferType::kStorageTexelBuffer;
   } else if (name == "resolve") {
     *type = BufferType::kResolve;
+  } else if (name == "transform_feedback") {
+    *type = BufferType::kTransformFeedback;
+  } else if (name == "input_attachment") {
+    *type = BufferType::kInputAttachment;
   } else {
     return Result("unknown buffer_type: " + name);
   }
@@ -1469,6 +1487,70 @@ Result Parser::ParsePipelineBind(Pipeline* pipeline) {
         }
       } else if (buffer_type == BufferType::kResolve) {
         r = pipeline->AddResolveTarget(buffer);
+      } else if (buffer_type == BufferType::kTransformFeedback) {
+        if (is_buffer_array) {
+          return Result("transform feedback buffers are bound one by one");
+        }
+        if (!pipeline->IsGraphics()) {
+          return Result(
+              "transform feedback buffers are only allowed in graphics "
+              "pipelines");
+        }
+        token = tokenizer_->NextToken();
+        if (!token->IsIdentifier() || token->AsString() != "XFB_BUFFER") {
+          return Result("BIND missing XFB_BUFFER");
+        }
+        token = tokenizer_->NextToken();
+        if (!token->IsInteger()) {
+          return Result("invalid value for BIND XFB_BUFFER");
+        }
+        r = pipeline->AddTransformFeedbackBuffer(buffer, token->AsUint32());
+        if (!r.IsSuccess()) {
+          return r;
+        }
+        return ValidateEndOfStatement("BIND command");
+      } else if (buffer_type == BufferType::kInputAttachment) {
+        if (!pipeline->IsGraphics()) {
+          return Result(
+              "input attachments are only allowed in graphics pipelines");
+        }
+        token = tokenizer_->NextToken();
+        if (!token->IsIdentifier() ||
+            token->AsString() != "INPUT_ATTACHMENT_INDEX") {
+          return Result("BIND missing INPUT_ATTACHMENT_INDEX");
+        }
+        token = tokenizer_->NextToken();
+        if (!token->IsInteger()) {
+          return Result("invalid value for BIND INPUT_ATTACHMENT_INDEX");
+        }
+        const uint32_t index = token->AsUint32();
+        token = tokenizer_->NextToken();
+        if (!token->IsIdentifier() || token->AsString() != "DESCRIPTOR_SET") {
+          return Result("missing DESCRIPTOR_SET for BIND command");
+        }
+        token = tokenizer_->NextToken();
+        if (!token->IsInteger()) {
+          return Result("invalid value for DESCRIPTOR_SET in BIND command");
+        }
+        const uint32_t descriptor_set = token->AsUint32();
+        token = tokenizer_->NextToken();
+        if (!token->IsIdentifier() || token->AsString() != "BINDING") {
+          return Result("missing BINDING for BIND command");
+        }
+        token = tokenizer_->NextToken();
+        if (!token->IsInteger()) {
+          return Result("invalid value for BINDING in BIND command");
+        }
+        const uint32_t binding = token->AsUint32();
+        for (size_t i = 0; i < buffers.size(); i++) {
+          r = pipeline->AddInputAttachment(
+              buffers[i], index + static_cast<uint32_t>(i), descriptor_set,
+              binding);
+          if (!r.IsSuccess()) {
+            return r;
+          }
+        }
+        return ValidateEndOfStatement("BIND command");
       }
     }
 
@@ -2747,6 +2829,7 @@ Result Parser::ParseImage() {
   bool width_set = false;
   bool height_set = false;
   bool depth_set = false;
+  bool layers_set = false;
 
   token = tokenizer_->PeekNextToken();
   while (token->IsIdentifier()) {
@@ -2808,6 +2891,22 @@ Result Parser::ParseImage() {
       buffer->SetImageDimension(ImageDimension::k2D);
     } else if (token->AsString() == "DIM_3D") {
       buffer->SetImageDimension(ImageDimension::k3D);
+    } else if (token->AsString() == "DIM_1D_ARRAY") {
+      buffer->SetImageDimension(ImageDimension::k1DArray);
+    } else if (token->AsString() == "DIM_2D_ARRAY") {
+      buffer->SetImageDimension(ImageDimension::k2DArray);
+    } else if (token->AsString() == "DIM_CUBE") {
+      buffer->SetImageDimension(ImageDimension::kCube);
+    } else if (token->AsString() == "DIM_CUBE_ARRAY") {
+      buffer->SetImageDimension(ImageDimension::kCubeArray);
+    } else if (token->AsString() == "LAYERS") {
+      token = tokenizer_->NextToken();
+      if (!token->IsInteger() || token->AsUint32() == 0) {
+        return Result("expected positive IMAGE LAYERS");
+      }
+
+      buffer->SetLayers(token->AsUint32());
+      layers_set = true;
     } else if (token->AsString() == "WIDTH") {
       token = tokenizer_->NextToken();
       if (!token->IsInteger() || token->AsUint32() == 0) {
@@ -2851,21 +2950,48 @@ Result Parser::ParseImage() {
     token = tokenizer_->PeekNextToken();
   }
 
-  if (buffer->GetImageDimension() == ImageDimension::k3D && !depth_set) {
+  const ImageDimension dim = buffer->GetImageDimension();
+  if (dim == ImageDimension::k3D && !depth_set) {
     return Result("expected IMAGE DEPTH");
   }
 
-  if ((buffer->GetImageDimension() == ImageDimension::k3D ||
-       buffer->GetImageDimension() == ImageDimension::k2D) &&
+  if ((dim == ImageDimension::k3D || dim == ImageDimension::k2D ||
+       dim == ImageDimension::k2DArray || dim == ImageDimension::kCube ||
+       dim == ImageDimension::kCubeArray) &&
       !height_set) {
     return Result("expected IMAGE HEIGHT");
   }
   if (!width_set) {
     return Result("expected IMAGE WIDTH");
   }
+  const bool arrayed = dim == ImageDimension::k1DArray ||
+                       dim == ImageDimension::k2DArray ||
+                       dim == ImageDimension::kCubeArray;
+  if (layers_set && !arrayed && dim != ImageDimension::kCube) {
+    return Result(
+        "IMAGE LAYERS is only allowed for DIM_1D_ARRAY, DIM_2D_ARRAY, "
+        "DIM_CUBE and DIM_CUBE_ARRAY");
+  }
+  if (dim == ImageDimension::kCube && !layers_set) {
+    buffer->SetLayers(6);
+  }
+  if (dim == ImageDimension::kCube && buffer->GetLayers() != 6) {
+    return Result("a DIM_CUBE IMAGE has 6 LAYERS");
+  }
+  if (dim == ImageDimension::kCubeArray && !layers_set) {
+    return Result("expected IMAGE LAYERS");
+  }
+  if (dim == ImageDimension::kCubeArray && buffer->GetLayers() % 6 != 0) {
+    return Result("IMAGE LAYERS of a DIM_CUBE_ARRAY must be a multiple of 6");
+  }
+  if ((dim == ImageDimension::kCube || dim == ImageDimension::kCubeArray) &&
+      buffer->GetWidth() != buffer->GetHeight()) {
+    return Result("IMAGE WIDTH and HEIGHT of a cube image must be equal");
+  }
 
-  const uint32_t size_in_items =
-      buffer->GetWidth() * buffer->GetHeight() * buffer->GetDepth();
+  const uint32_t size_in_items = buffer->GetWidth() * buffer->GetHeight() *
+                                 buffer->GetDepth() * buffer->GetLayers() *
+                                 buffer->GetSamples();
   buffer->SetElementCount(size_in_items);
 
   // Parse initializers.

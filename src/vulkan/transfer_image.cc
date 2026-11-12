@@ -20,6 +20,7 @@
 
 #include "src/vulkan/command_buffer.h"
 #include "src/vulkan/device.h"
+#include "src/vulkan/multisample_copy_shaders.h"
 
 namespace amber {
 namespace vulkan {
@@ -77,10 +78,12 @@ TransferImage::TransferImage(Device* device,
                              uint32_t mip_levels,
                              uint32_t base_mip_level,
                              uint32_t used_mip_levels,
-                             uint32_t samples)
+                             uint32_t samples,
+                             uint32_t layers,
+                             VkImageViewType view_type)
     : Resource(
           device,
-          x * y * z *
+          x * y * z * layers * (samples > 1 ? samples : 1) *
               (format.SizeInBytes() +
                // D24_UNORM_S8_UINT requires 32bit component for depth when
                // performing buffer copies. Reserve extra room to handle that.
@@ -91,16 +94,44 @@ TransferImage::TransferImage(Device* device,
       mip_levels_(mip_levels),
       base_mip_level_(base_mip_level),
       used_mip_levels_(used_mip_levels),
-      samples_(samples) {
+      samples_(samples),
+      layers_(layers),
+      view_type_(view_type) {
   image_info_.format = device_->GetVkFormat(format);
   image_info_.imageType = image_type;
   image_info_.extent = {x, y, z};
   image_info_.mipLevels = mip_levels;
+  image_info_.arrayLayers = layers;
+  if (view_type == VK_IMAGE_VIEW_TYPE_CUBE ||
+      view_type == VK_IMAGE_VIEW_TYPE_CUBE_ARRAY) {
+    image_info_.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+  }
   image_info_.samples = GetVkSampleCount(samples);
   image_info_.usage = image_usage_flags;
 }
 
 TransferImage::~TransferImage() {
+  auto* ptrs = device_->GetPtrs();
+  VkDevice vk_device = device_->GetVkDevice();
+  if (ms_upload_ != VK_NULL_HANDLE) {
+    ptrs->vkDestroyPipeline(vk_device, ms_upload_, nullptr);
+  }
+  if (ms_download_ != VK_NULL_HANDLE) {
+    ptrs->vkDestroyPipeline(vk_device, ms_download_, nullptr);
+  }
+  if (ms_pool_ != VK_NULL_HANDLE) {
+    ptrs->vkDestroyDescriptorPool(vk_device, ms_pool_, nullptr);
+  }
+  if (ms_pipeline_layout_ != VK_NULL_HANDLE) {
+    ptrs->vkDestroyPipelineLayout(vk_device, ms_pipeline_layout_, nullptr);
+  }
+  if (ms_set_layout_ != VK_NULL_HANDLE) {
+    ptrs->vkDestroyDescriptorSetLayout(vk_device, ms_set_layout_, nullptr);
+  }
+  if (storage_view_ != VK_NULL_HANDLE) {
+    ptrs->vkDestroyImageView(vk_device, storage_view_, nullptr);
+  }
+
   if (view_ != VK_NULL_HANDLE) {
     device_->GetPtrs()->vkDestroyImageView(device_->GetVkDevice(), view_,
                                            nullptr);
@@ -163,7 +194,8 @@ Result TransferImage::Initialize() {
   // and vice versa.
   r = CreateVkBuffer(
       &host_accessible_buffer_,
-      VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+      VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+          (multisample_transfer_ ? VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : 0));
   if (!r.IsSuccess()) {
     return r;
   }
@@ -178,12 +210,258 @@ Result TransferImage::Initialize() {
     return r;
   }
 
-  return MapMemory(host_accessible_memory_);
+  r = MapMemory(host_accessible_memory_);
+  if (!r.IsSuccess()) {
+    return r;
+  }
+
+  if (multisample_transfer_) {
+    return CreateMultisampleTransfer();
+  }
+  return {};
+}
+
+void TransferImage::EnableMultisampleTransfer() {
+  if (samples_ <= 1) {
+    return;
+  }
+  multisample_transfer_ = true;
+  image_info_.usage |= VK_IMAGE_USAGE_STORAGE_BIT;
+  image_info_.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT |
+                       VK_IMAGE_CREATE_EXTENDED_USAGE_BIT;
+}
+
+Result TransferImage::CreateMultisampleTransfer() {
+  auto* ptrs = device_->GetPtrs();
+  VkDevice vk_device = device_->GetVkDevice();
+
+  VkFormat word_format = VK_FORMAT_UNDEFINED;
+  const uint32_t* upload_code = nullptr;
+  size_t upload_size = 0;
+  const uint32_t* download_code = nullptr;
+  size_t download_size = 0;
+  const uint32_t texel_bytes = GetSizeInBytes() / (image_info_.extent.width *
+                                                   image_info_.extent.height *
+                                                   layers_ * samples_);
+  switch (texel_bytes) {
+    case 4:
+      word_format = VK_FORMAT_R32_UINT;
+      upload_code = kUpload1;
+      upload_size = sizeof(kUpload1);
+      download_code = kDownload1;
+      download_size = sizeof(kDownload1);
+      break;
+    case 8:
+      word_format = VK_FORMAT_R32G32_UINT;
+      upload_code = kUpload2;
+      upload_size = sizeof(kUpload2);
+      download_code = kDownload2;
+      download_size = sizeof(kDownload2);
+      break;
+    case 16:
+      word_format = VK_FORMAT_R32G32B32A32_UINT;
+      upload_code = kUpload4;
+      upload_size = sizeof(kUpload4);
+      download_code = kDownload4;
+      download_size = sizeof(kDownload4);
+      break;
+    default:
+      return Result(
+          "Vulkan: only multisampled images with 4, 8 or 16 bytes per texel "
+          "can take data from the host, not " +
+          std::to_string(texel_bytes));
+  }
+
+  VkImageViewCreateInfo view_info = VkImageViewCreateInfo();
+  view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+  view_info.image = image_;
+  view_info.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+  view_info.format = word_format;
+  view_info.components = {VK_COMPONENT_SWIZZLE_IDENTITY,
+                          VK_COMPONENT_SWIZZLE_IDENTITY,
+                          VK_COMPONENT_SWIZZLE_IDENTITY,
+                          VK_COMPONENT_SWIZZLE_IDENTITY};
+  view_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, layers_};
+  VkImageViewUsageCreateInfo view_usage = VkImageViewUsageCreateInfo();
+  view_usage.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO;
+  view_usage.usage = VK_IMAGE_USAGE_STORAGE_BIT;
+  view_info.pNext = &view_usage;
+  if (ptrs->vkCreateImageView(vk_device, &view_info, nullptr,
+                              &storage_view_) != VK_SUCCESS) {
+    return Result(
+        "Vulkan: cannot create the storage view of a multisampled image");
+  }
+
+  VkDescriptorSetLayoutBinding bindings[2] = {};
+  bindings[0].binding = 0;
+  bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+  bindings[0].descriptorCount = 1;
+  bindings[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+  bindings[1].binding = 1;
+  bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+  bindings[1].descriptorCount = 1;
+  bindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+  VkDescriptorSetLayoutCreateInfo set_info = VkDescriptorSetLayoutCreateInfo();
+  set_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+  set_info.bindingCount = 2;
+  set_info.pBindings = bindings;
+  if (ptrs->vkCreateDescriptorSetLayout(vk_device, &set_info, nullptr,
+                                        &ms_set_layout_) != VK_SUCCESS) {
+    return Result("Vulkan::Calling vkCreateDescriptorSetLayout Fail");
+  }
+
+  VkPushConstantRange push_range = {VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                                    3 * sizeof(uint32_t)};
+  VkPipelineLayoutCreateInfo layout_info = VkPipelineLayoutCreateInfo();
+  layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+  layout_info.setLayoutCount = 1;
+  layout_info.pSetLayouts = &ms_set_layout_;
+  layout_info.pushConstantRangeCount = 1;
+  layout_info.pPushConstantRanges = &push_range;
+  if (ptrs->vkCreatePipelineLayout(vk_device, &layout_info, nullptr,
+                                   &ms_pipeline_layout_) != VK_SUCCESS) {
+    return Result("Vulkan::Calling vkCreatePipelineLayout Fail");
+  }
+
+  VkDescriptorPoolSize pool_sizes[2] = {
+      {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1},
+      {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}};
+  VkDescriptorPoolCreateInfo pool_info = VkDescriptorPoolCreateInfo();
+  pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+  pool_info.maxSets = 1;
+  pool_info.poolSizeCount = 2;
+  pool_info.pPoolSizes = pool_sizes;
+  if (ptrs->vkCreateDescriptorPool(vk_device, &pool_info, nullptr, &ms_pool_) !=
+      VK_SUCCESS) {
+    return Result("Vulkan::Calling vkCreateDescriptorPool Fail");
+  }
+
+  VkDescriptorSetAllocateInfo alloc_info = VkDescriptorSetAllocateInfo();
+  alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+  alloc_info.descriptorPool = ms_pool_;
+  alloc_info.descriptorSetCount = 1;
+  alloc_info.pSetLayouts = &ms_set_layout_;
+  if (ptrs->vkAllocateDescriptorSets(vk_device, &alloc_info, &ms_set_) !=
+      VK_SUCCESS) {
+    return Result("Vulkan::Calling vkAllocateDescriptorSets Fail");
+  }
+
+  VkDescriptorImageInfo image_info = {VK_NULL_HANDLE, storage_view_,
+                                      VK_IMAGE_LAYOUT_GENERAL};
+  VkDescriptorBufferInfo buffer_info = {host_accessible_buffer_, 0,
+                                        VK_WHOLE_SIZE};
+  VkWriteDescriptorSet writes[2] = {};
+  writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  writes[0].dstSet = ms_set_;
+  writes[0].dstBinding = 0;
+  writes[0].descriptorCount = 1;
+  writes[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+  writes[0].pImageInfo = &image_info;
+  writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  writes[1].dstSet = ms_set_;
+  writes[1].dstBinding = 1;
+  writes[1].descriptorCount = 1;
+  writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+  writes[1].pBufferInfo = &buffer_info;
+  ptrs->vkUpdateDescriptorSets(vk_device, 2, writes, 0, nullptr);
+
+  const struct {
+    const uint32_t* code;
+    size_t size;
+    VkPipeline* pipeline;
+  } shaders[] = {{upload_code, upload_size, &ms_upload_},
+                 {download_code, download_size, &ms_download_}};
+  for (const auto& shader : shaders) {
+    VkShaderModuleCreateInfo module_info = VkShaderModuleCreateInfo();
+    module_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    module_info.codeSize = shader.size;
+    module_info.pCode = shader.code;
+    VkShaderModule module = VK_NULL_HANDLE;
+    if (ptrs->vkCreateShaderModule(vk_device, &module_info, nullptr,
+                                   &module) != VK_SUCCESS) {
+      return Result("Vulkan::Calling vkCreateShaderModule Fail");
+    }
+    VkComputePipelineCreateInfo pipeline_info = VkComputePipelineCreateInfo();
+    pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    pipeline_info.stage.sType =
+        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    pipeline_info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    pipeline_info.stage.module = module;
+    pipeline_info.stage.pName = "main";
+    pipeline_info.layout = ms_pipeline_layout_;
+    VkResult created = ptrs->vkCreateComputePipelines(
+        vk_device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr,
+        shader.pipeline);
+    ptrs->vkDestroyShaderModule(vk_device, module, nullptr);
+    if (created != VK_SUCCESS) {
+      return Result(
+          "Vulkan: cannot create the pipeline that copies a multisampled "
+          "image");
+    }
+  }
+  return {};
+}
+
+void TransferImage::RecordMultisampleCopy(CommandBuffer* command_buffer,
+                                          bool upload,
+                                          VkImageLayout layout,
+                                          VkAccessFlags access,
+                                          VkPipelineStageFlags stage) {
+  auto* ptrs = device_->GetPtrs();
+  VkCommandBuffer cmd = command_buffer->GetVkCommandBuffer();
+
+  VkImageMemoryBarrier to_general = VkImageMemoryBarrier();
+  to_general.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  to_general.srcAccessMask = access;
+  to_general.dstAccessMask =
+      VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+  to_general.oldLayout = layout;
+  to_general.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+  to_general.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  to_general.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  to_general.image = image_;
+  to_general.subresourceRange = {aspect_, 0, VK_REMAINING_MIP_LEVELS, 0,
+                                 VK_REMAINING_ARRAY_LAYERS};
+  VkMemoryBarrier host_to_shader = VkMemoryBarrier();
+  host_to_shader.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+  host_to_shader.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+  host_to_shader.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+  ptrs->vkCmdPipelineBarrier(
+      cmd, stage | VK_PIPELINE_STAGE_HOST_BIT,
+      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &host_to_shader, 0, nullptr,
+      1, &to_general);
+
+  ptrs->vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                          upload ? ms_upload_ : ms_download_);
+  ptrs->vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                ms_pipeline_layout_, 0, 1, &ms_set_, 0,
+                                nullptr);
+  const uint32_t extent[3] = {image_info_.extent.width,
+                              image_info_.extent.height, samples_};
+  ptrs->vkCmdPushConstants(cmd, ms_pipeline_layout_,
+                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(extent),
+                           extent);
+  ptrs->vkCmdDispatch(cmd, image_info_.extent.width, image_info_.extent.height,
+                      layers_);
+
+  VkImageMemoryBarrier back = to_general;
+  back.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+  back.dstAccessMask = access;
+  back.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+  back.newLayout = layout;
+  VkMemoryBarrier shader_to_host = VkMemoryBarrier();
+  shader_to_host.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+  shader_to_host.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+  shader_to_host.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+  ptrs->vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                             stage | VK_PIPELINE_STAGE_HOST_BIT, 0, 1,
+                             &shader_to_host, 0, nullptr, 1, &back);
 }
 
 VkImageViewType TransferImage::GetImageViewType() const {
-  // TODO(alan-baker): handle other view types.
-  // 1D-array, 2D-array, Cube, Cube-array.
+  if (view_type_ != VK_IMAGE_VIEW_TYPE_MAX_ENUM) {
+    return view_type_;
+  }
   switch (image_info_.imageType) {
     case VK_IMAGE_TYPE_1D:
       return VK_IMAGE_VIEW_TYPE_1D;
@@ -216,7 +494,7 @@ Result TransferImage::CreateVkImageView(VkImageAspectFlags aspect) {
       base_mip_level_,  /* baseMipLevel */
       used_mip_levels_, /* levelCount */
       0,                /* baseArrayLayer */
-      1,                /* layerCount */
+      layers_,          /* layerCount */
   };
 
   if (device_->GetPtrs()->vkCreateImageView(device_->GetVkDevice(),
@@ -235,7 +513,8 @@ VkBufferImageCopy TransferImage::CreateBufferImageCopy(
   if (aspect == VK_IMAGE_ASPECT_STENCIL_BIT) {
     // Store stencil data at the end of the buffer after depth data.
     copy_region.bufferOffset =
-        GetSizeInBytes() - image_info_.extent.width * image_info_.extent.height;
+        GetSizeInBytes() -
+        image_info_.extent.width * image_info_.extent.height * layers_;
   } else {
     copy_region.bufferOffset = 0;
   }
@@ -247,7 +526,7 @@ VkBufferImageCopy TransferImage::CreateBufferImageCopy(
       aspect,    /* aspectMask */
       mip_level, /* mipLevel */
       0,         /* baseArrayLayer */
-      1,         /* layerCount */
+      layers_,   /* layerCount */
   };
   copy_region.imageOffset = {0, 0, 0};
   copy_region.imageExtent = {image_info_.extent.width >> mip_level,
@@ -262,6 +541,12 @@ void TransferImage::CopyToHost(CommandBuffer* command_buffer) {
                                            VK_IMAGE_ASPECT_STENCIL_BIT};
   // Copy operations don't support multisample images.
   if (samples_ > 1) {
+    if (multisample_transfer_) {
+      RecordMultisampleCopy(command_buffer, false,
+                            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                            VK_ACCESS_TRANSFER_READ_BIT,
+                            VK_PIPELINE_STAGE_TRANSFER_BIT);
+    }
     return;
   }
 
@@ -288,6 +573,12 @@ void TransferImage::CopyToHost(CommandBuffer* command_buffer) {
 void TransferImage::CopyToDevice(CommandBuffer* command_buffer) {
   // Copy operations don't support multisample images.
   if (samples_ > 1) {
+    if (multisample_transfer_) {
+      RecordMultisampleCopy(command_buffer, true,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            VK_ACCESS_TRANSFER_WRITE_BIT,
+                            VK_PIPELINE_STAGE_TRANSFER_BIT);
+    }
     return;
   }
 
@@ -331,9 +622,9 @@ void TransferImage::ImageBarrier(CommandBuffer* command_buffer,
   barrier.subresourceRange = {
       aspect_,                 /* aspectMask */
       0,                       /* baseMipLevel */
-      VK_REMAINING_MIP_LEVELS, /* levelCount */
-      0,                       /* baseArrayLayer */
-      1,                       /* layerCount */
+      VK_REMAINING_MIP_LEVELS,   /* levelCount */
+      0,                         /* baseArrayLayer */
+      VK_REMAINING_ARRAY_LAYERS, /* layerCount */
   };
 
   switch (layout_) {

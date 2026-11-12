@@ -101,6 +101,10 @@ class Pipeline {
   /// Initializes the pipeline.
   Result Initialize(CommandPool* pool);
 
+  /// Adds |descriptor| to descriptor set |desc_set|, which GetDescriptorSlot()
+  /// must have reserved.
+  Descriptor* AppendDescriptor(uint32_t desc_set,
+                               std::unique_ptr<Descriptor> descriptor);
   Result GetDescriptorSlot(uint32_t desc_set,
                            uint32_t binding,
                            Descriptor** desc);

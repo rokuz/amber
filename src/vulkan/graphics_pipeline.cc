@@ -14,14 +14,18 @@
 
 #include "src/vulkan/graphics_pipeline.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstring>
 
 #include "src/command.h"
 #include "src/vulkan/blas.h"
 #include "src/vulkan/command_pool.h"
+#include "src/vulkan/descriptor.h"
 #include "src/vulkan/device.h"
 #include "src/vulkan/tlas.h"
+#include "src/vulkan/transfer_buffer.h"
 
 namespace amber {
 namespace vulkan {
@@ -353,6 +357,56 @@ VkBlendOp ToVkBlendOp(BlendOp op) {
   return VK_BLEND_OP_ADD;
 }
 
+class InputAttachmentDescriptor : public Descriptor {
+ public:
+  InputAttachmentDescriptor(Device* device,
+                            FrameBuffer* frame,
+                            uint32_t desc_set,
+                            uint32_t binding)
+      : Descriptor(DescriptorType::kInputAttachment,
+                   device,
+                   desc_set,
+                   binding),
+        frame_(frame) {}
+
+  void AddAttachment(size_t index) { attachments_.push_back(index); }
+
+  uint32_t GetDescriptorCount() override {
+    return static_cast<uint32_t>(attachments_.size());
+  }
+
+  Result CreateResourceIfNeeded() override {
+    is_descriptor_set_update_needed_ = true;
+    return {};
+  }
+
+  void UpdateDescriptorSetIfNeeded(VkDescriptorSet descriptor_set) override {
+    if (!is_descriptor_set_update_needed_) {
+      return;
+    }
+    std::vector<VkDescriptorImageInfo> infos;
+    for (size_t index : attachments_) {
+      infos.push_back({VK_NULL_HANDLE, frame_->GetInputAttachmentView(index),
+                       VK_IMAGE_LAYOUT_GENERAL});
+    }
+    VkWriteDescriptorSet write = VkWriteDescriptorSet();
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = descriptor_set;
+    write.dstBinding = binding_;
+    write.dstArrayElement = 0;
+    write.descriptorCount = static_cast<uint32_t>(infos.size());
+    write.descriptorType = GetVkDescriptorType();
+    write.pImageInfo = infos.data();
+    device_->GetPtrs()->vkUpdateDescriptorSets(device_->GetVkDevice(), 1,
+                                               &write, 0, nullptr);
+    is_descriptor_set_update_needed_ = false;
+  }
+
+ private:
+  FrameBuffer* frame_;
+  std::vector<size_t> attachments_;
+};
+
 class RenderPassGuard {
  public:
   explicit RenderPassGuard(GraphicsPipeline* pipeline) : pipeline_(pipeline) {
@@ -484,6 +538,28 @@ Result GraphicsPipeline::CreateRenderPass() {
 
   subpass_desc.pResolveAttachments = resolve_refer.data();
 
+  std::vector<VkAttachmentReference> input_refer;
+  for (const auto* info : input_attachments_) {
+    attachment_desc.push_back(kDefaultAttachmentDesc);
+    attachment_desc.back().format =
+        device_->GetVkFormat(*info->buffer->GetFormat());
+    attachment_desc.back().samples =
+        static_cast<VkSampleCountFlagBits>(info->buffer->GetSamples());
+    attachment_desc.back().initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+    attachment_desc.back().finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+    if (input_refer.size() <= info->location) {
+      input_refer.resize(info->location + 1,
+                         {VK_ATTACHMENT_UNUSED, VK_IMAGE_LAYOUT_UNDEFINED});
+    }
+    input_refer[info->location].attachment =
+        static_cast<uint32_t>(attachment_desc.size() - 1);
+    input_refer[info->location].layout = VK_IMAGE_LAYOUT_GENERAL;
+  }
+  subpass_desc.inputAttachmentCount = static_cast<uint32_t>(input_refer.size());
+  subpass_desc.pInputAttachments =
+      input_refer.empty() ? nullptr : input_refer.data();
+
   VkRenderPassCreateInfo render_pass_info = VkRenderPassCreateInfo();
   render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
   render_pass_info.attachmentCount =
@@ -491,6 +567,17 @@ Result GraphicsPipeline::CreateRenderPass() {
   render_pass_info.pAttachments = attachment_desc.data();
   render_pass_info.subpassCount = 1;
   render_pass_info.pSubpasses = &subpass_desc;
+
+  const uint32_t view_mask =
+      view_count_ >= 32 ? ~0u : ((1u << view_count_) - 1u);
+  VkRenderPassMultiviewCreateInfo multiview_info =
+      VkRenderPassMultiviewCreateInfo();
+  multiview_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO;
+  multiview_info.subpassCount = 1;
+  multiview_info.pViewMasks = &view_mask;
+  if (view_count_ > 0) {
+    render_pass_info.pNext = &multiview_info;
+  }
 
   if (device_->GetPtrs()->vkCreateRenderPass(device_->GetVkDevice(),
                                              &render_pass_info, nullptr,
@@ -773,7 +860,14 @@ Result GraphicsPipeline::Initialize(uint32_t width,
   frame_ = std::make_unique<FrameBuffer>(device_, color_buffers_,
                                          depth_stencil_buffer_,
                                          resolve_targets_, width, height);
+  frame_->SetInputAttachments(input_attachments_);
+  frame_->SetViewCount(view_count_);
   r = frame_->Initialize(render_pass_);
+  if (!r.IsSuccess()) {
+    return r;
+  }
+
+  r = AddInputAttachmentDescriptors();
   if (!r.IsSuccess()) {
     return r;
   }
@@ -781,6 +875,33 @@ Result GraphicsPipeline::Initialize(uint32_t width,
   frame_width_ = width;
   frame_height_ = height;
 
+  return {};
+}
+
+Result GraphicsPipeline::AddInputAttachmentDescriptors() {
+  for (const auto* info : input_descriptors_) {
+    size_t attachment = 0;
+    while (attachment < input_attachments_.size() &&
+           input_attachments_[attachment]->location != info->location) {
+      ++attachment;
+    }
+    Descriptor* desc = nullptr;
+    Result r = GetDescriptorSlot(info->descriptor_set, info->binding, &desc);
+    if (!r.IsSuccess()) {
+      return r;
+    }
+    if (desc == nullptr) {
+      desc = AppendDescriptor(
+          info->descriptor_set,
+          std::make_unique<InputAttachmentDescriptor>(
+              device_, frame_.get(), info->descriptor_set, info->binding));
+    } else if (desc->GetDescriptorType() != DescriptorType::kInputAttachment) {
+      return Result(
+          "Descriptors bound to the same binding needs to have matching "
+          "descriptor types");
+    }
+    static_cast<InputAttachmentDescriptor*>(desc)->AddAttachment(attachment);
+  }
   return {};
 }
 
@@ -1006,6 +1127,40 @@ Result GraphicsPipeline::RecordDraw(const PipelineData* pipeline_data,
     return r;
   }
 
+  std::vector<std::unique_ptr<TransferBuffer>> feedback;
+  std::vector<VkBuffer> feedback_buffers;
+  std::vector<VkDeviceSize> feedback_offsets;
+  std::vector<VkDeviceSize> feedback_sizes;
+  for (const auto* info : transform_feedback_buffers_) {
+    auto* values = info->buffer->ValuePtr();
+    const uint32_t size = info->buffer->GetSizeInBytes();
+    feedback.push_back(std::make_unique<TransferBuffer>(device_, size, nullptr));
+    r = feedback.back()->AddUsageFlags(
+        VK_BUFFER_USAGE_TRANSFORM_FEEDBACK_BUFFER_BIT_EXT |
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+    if (!r.IsSuccess()) {
+      return r;
+    }
+    r = feedback.back()->Initialize();
+    if (!r.IsSuccess()) {
+      return r;
+    }
+    std::memset(feedback.back()->HostAccessibleMemoryPtr(), 0, size);
+    std::memcpy(feedback.back()->HostAccessibleMemoryPtr(), values->data(),
+                std::min<size_t>(values->size(), size));
+    feedback_buffers.push_back(feedback.back()->GetVkBuffer());
+    feedback_offsets.push_back(0);
+    feedback_sizes.push_back(size);
+  }
+  if (!feedback.empty() &&
+      (device_->GetPtrs()->vkCmdBindTransformFeedbackBuffersEXT == nullptr ||
+       device_->GetPtrs()->vkCmdBeginTransformFeedbackEXT == nullptr ||
+       device_->GetPtrs()->vkCmdEndTransformFeedbackEXT == nullptr)) {
+    return Result(
+        "Vulkan: transform feedback buffers need VK_EXT_transform_feedback "
+        "(DEVICE_FEATURE TransformFeedbackFeaturesEXT.transformFeedback)");
+  }
+
   // Note that a command updating a descriptor set and a command using
   // it must be submitted separately, because using a descriptor set
   // while updating it is not safe.
@@ -1054,13 +1209,40 @@ Result GraphicsPipeline::RecordDraw(const PipelineData* pipeline_data,
                                             VK_PIPELINE_BIND_POINT_GRAPHICS,
                                             pipeline);
 
+      for (size_t i = 0; i < feedback.size(); ++i) {
+        device_->GetPtrs()->vkCmdBindTransformFeedbackBuffersEXT(
+            command_->GetVkCommandBuffer(),
+            transform_feedback_buffers_[i]->location, 1, &feedback_buffers[i],
+            &feedback_offsets[i], &feedback_sizes[i]);
+      }
+      if (!feedback.empty()) {
+        device_->GetPtrs()->vkCmdBeginTransformFeedbackEXT(
+            command_->GetVkCommandBuffer(), 0, 0, nullptr, nullptr);
+      }
+
       r = record();
       if (!r.IsSuccess()) {
         return r;
       }
+
+      if (!feedback.empty()) {
+        device_->GetPtrs()->vkCmdEndTransformFeedbackEXT(
+            command_->GetVkCommandBuffer(), 0, 0, nullptr, nullptr);
+      }
     }
     EndTimerQuery();
     frame_->TransferImagesToHost(command_.get());
+
+    if (!feedback.empty()) {
+      VkMemoryBarrier barrier = VkMemoryBarrier();
+      barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+      barrier.srcAccessMask = VK_ACCESS_TRANSFORM_FEEDBACK_WRITE_BIT_EXT;
+      barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+      device_->GetPtrs()->vkCmdPipelineBarrier(
+          command_->GetVkCommandBuffer(),
+          VK_PIPELINE_STAGE_TRANSFORM_FEEDBACK_BIT_EXT,
+          VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &barrier, 0, nullptr, 0, nullptr);
+    }
 
     r = cmd_buf_guard.Submit(GetFenceTimeout(),
                              GetPipelineRuntimeLayerEnabled());
@@ -1075,6 +1257,13 @@ Result GraphicsPipeline::RecordDraw(const PipelineData* pipeline_data,
   }
 
   frame_->CopyImagesToBuffers();
+
+  for (size_t i = 0; i < feedback.size(); ++i) {
+    auto* values = transform_feedback_buffers_[i]->buffer->ValuePtr();
+    values->resize(feedback_sizes[i]);
+    std::memcpy(values->data(), feedback[i]->HostAccessibleMemoryPtr(),
+                static_cast<size_t>(feedback_sizes[i]));
+  }
 
   device_->GetPtrs()->vkDestroyPipeline(device_->GetVkDevice(), pipeline,
                                         nullptr);

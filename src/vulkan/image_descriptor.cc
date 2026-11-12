@@ -52,6 +52,7 @@ Result ImageDescriptor::CreateResourceIfNeeded() {
 
     // Default to 2D image.
     VkImageType image_type = VK_IMAGE_TYPE_2D;
+    VkImageViewType view_type = VK_IMAGE_VIEW_TYPE_MAX_ENUM;
     switch (amber_buffer->GetImageDimension()) {
       case ImageDimension::k1D:
         image_type = VK_IMAGE_TYPE_1D;
@@ -61,6 +62,22 @@ Result ImageDescriptor::CreateResourceIfNeeded() {
         break;
       case ImageDimension::k3D:
         image_type = VK_IMAGE_TYPE_3D;
+        break;
+      case ImageDimension::k1DArray:
+        image_type = VK_IMAGE_TYPE_1D;
+        view_type = VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+        break;
+      case ImageDimension::k2DArray:
+        image_type = VK_IMAGE_TYPE_2D;
+        view_type = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+        break;
+      case ImageDimension::kCube:
+        image_type = VK_IMAGE_TYPE_2D;
+        view_type = VK_IMAGE_VIEW_TYPE_CUBE;
+        break;
+      case ImageDimension::kCubeArray:
+        image_type = VK_IMAGE_TYPE_2D;
+        view_type = VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
         break;
       default:
         break;
@@ -92,7 +109,10 @@ Result ImageDescriptor::CreateResourceIfNeeded() {
         device_, *fmt, aspect, image_type, usage, amber_buffer->GetWidth(),
         amber_buffer->GetHeight(), amber_buffer->GetDepth(),
         amber_buffer->GetMipLevels(), base_mip_level_, VK_REMAINING_MIP_LEVELS,
-        amber_buffer->GetSamples());
+        amber_buffer->GetSamples(), amber_buffer->GetLayers(), view_type);
+    if (amber_buffer->GetSamples() > 1) {
+      transfer_image->EnableMultisampleTransfer();
+    }
 
     // Store the transfer image to the pipeline's map of transfer images.
     transfer_resources[amber_buffer] = std::move(transfer_image);

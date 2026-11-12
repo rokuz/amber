@@ -395,6 +395,13 @@ Result Pipeline::GetDescriptorSlot(uint32_t desc_set,
   return {};
 }
 
+Descriptor* Pipeline::AppendDescriptor(uint32_t desc_set,
+                                       std::unique_ptr<Descriptor> descriptor) {
+  auto& descriptors = descriptor_set_info_[desc_set].descriptors;
+  descriptors.push_back(std::move(descriptor));
+  return descriptors.back().get();
+}
+
 Result Pipeline::AddDescriptorBuffer(Buffer* amber_buffer) {
   // Don't add the buffer if it's already added.
   const auto& buffer =

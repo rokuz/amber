@@ -543,6 +543,64 @@ END
   EXPECT_EQ(4u, s2[0].GetSpecialization().at(3));
 }
 
+TEST_F(AmberScriptParserTest, PipelineMultiview) {
+  std::string in = R"(
+SHADER vertex my_shader PASSTHROUGH
+SHADER fragment my_fragment GLSL
+# GLSL Shader
+END
+BUFFER my_fb FORMAT R32G32B32A32_SFLOAT
+BUFFER my_ds FORMAT D32_SFLOAT
+
+PIPELINE graphics my_pipeline
+  ATTACH my_shader
+  ATTACH my_fragment
+  FRAMEBUFFER_SIZE 4 2
+  MULTIVIEW 3
+  BIND BUFFER my_fb AS color LOCATION 0
+  BIND BUFFER my_ds AS depth_stencil
+END)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+
+  auto script = parser.GetScript();
+  const auto* pipeline = script->GetPipelines()[0].get();
+  EXPECT_EQ(3U, pipeline->GetViewCount());
+  const auto* color = pipeline->GetColorAttachments()[0].buffer;
+  EXPECT_EQ(3U, color->GetLayers());
+  EXPECT_EQ(24U, color->ElementCount());
+  EXPECT_EQ(24U, pipeline->GetDepthStencilBuffer().buffer->ElementCount());
+}
+
+TEST_F(AmberScriptParserTest, PipelineMultiviewInvalid) {
+  struct {
+    const char* line;
+    const char* err;
+  } cases[] = {
+      {"MULTIVIEW 0", "MULTIVIEW expects a view count from 1 to 32"},
+      {"MULTIVIEW 33", "MULTIVIEW expects a view count from 1 to 32"},
+      {"MULTIVIEW two", "MULTIVIEW expects a view count from 1 to 32"},
+  };
+  for (const auto& c : cases) {
+    std::string in = R"(
+SHADER vertex my_shader PASSTHROUGH
+SHADER fragment my_fragment GLSL
+# GLSL Shader
+END
+PIPELINE graphics my_pipeline
+  ATTACH my_shader
+  ATTACH my_fragment
+  )" + std::string(c.line) + R"(
+END)";
+    Parser parser;
+    Result r = parser.Parse(in);
+    ASSERT_FALSE(r.IsSuccess()) << c.line;
+    EXPECT_NE(std::string::npos, r.Error().find(c.err)) << r.Error();
+  }
+}
+
 TEST_F(AmberScriptParserTest, PipelinePatchControlPoints) {
   std::string in = R"(
 DEVICE_FEATURE tessellationShader

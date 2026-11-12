@@ -81,6 +81,38 @@ class GraphicsPipeline : public Pipeline {
     patch_control_points_ = points;
   }
 
+  /// Sets the buffers that capture transform feedback in every draw; must be
+  /// called before Initialize().
+  void SetTransformFeedbackBuffers(
+      const std::vector<amber::Pipeline::BufferInfo>& buffers) {
+    transform_feedback_buffers_.clear();
+    for (const auto& info : buffers) {
+      transform_feedback_buffers_.push_back(&info);
+    }
+  }
+
+  /// Renders |view_count| views with multiview (0 for none); must be called
+  /// before Initialize().
+  void SetViewCount(uint32_t view_count) { view_count_ = view_count; }
+
+  /// Sets the images the subpass reads as input attachments; must be called
+  /// before Initialize().
+  void SetInputAttachments(
+      const std::vector<amber::Pipeline::BufferInfo>& attachments) {
+    input_attachments_.clear();
+    input_descriptors_.clear();
+    for (const auto& info : attachments) {
+      input_descriptors_.push_back(&info);
+      bool seen = false;
+      for (const auto* known : input_attachments_) {
+        seen = seen || known->location == info.location;
+      }
+      if (!seen) {
+        input_attachments_.push_back(&info);
+      }
+    }
+  }
+
  private:
   Result CreateVkGraphicsPipeline(const PipelineData* pipeline_data,
                                   VkPrimitiveTopology topology,
@@ -94,6 +126,7 @@ class GraphicsPipeline : public Pipeline {
                     bool is_timed_execution,
                     const std::function<Result()>& record);
   Result SendVertexBufferDataIfNeeded(VertexBuffer* vertex_buffer);
+  Result AddInputAttachmentDescriptors();
 
   VkPipelineDepthStencilStateCreateInfo GetVkPipelineDepthStencilInfo(
       const PipelineData* pipeline_data);
@@ -106,6 +139,10 @@ class GraphicsPipeline : public Pipeline {
   // color buffers and resolve targets are owned by the amber::Pipeline.
   std::vector<const amber::Pipeline::BufferInfo*> color_buffers_;
   std::vector<const amber::Pipeline::BufferInfo*> resolve_targets_;
+  std::vector<const amber::Pipeline::BufferInfo*> transform_feedback_buffers_;
+  std::vector<const amber::Pipeline::BufferInfo*> input_attachments_;
+  std::vector<const amber::Pipeline::BufferInfo*> input_descriptors_;
+  uint32_t view_count_ = 0;
   amber::Pipeline::BufferInfo depth_stencil_buffer_;
   std::unique_ptr<IndexBuffer> index_buffer_;
 

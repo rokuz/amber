@@ -239,6 +239,11 @@ Result EngineVulkan::CreatePipeline(amber::Pipeline* pipeline) {
 
     vk_pipeline->AsGraphics()->SetPatchControlPoints(
         pipeline->GetPipelineData()->GetPatchControlPoints());
+    vk_pipeline->AsGraphics()->SetTransformFeedbackBuffers(
+        pipeline->GetTransformFeedbackBuffers());
+    vk_pipeline->AsGraphics()->SetInputAttachments(
+        pipeline->GetInputAttachments());
+    vk_pipeline->AsGraphics()->SetViewCount(pipeline->GetViewCount());
 
     r = vk_pipeline->AsGraphics()->Initialize(pipeline->GetFramebufferWidth(),
                                               pipeline->GetFramebufferHeight(),

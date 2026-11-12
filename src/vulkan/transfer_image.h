@@ -40,11 +40,19 @@ class TransferImage : public Resource {
                 uint32_t mip_levels,
                 uint32_t base_mip_level,
                 uint32_t used_mip_levels,
-                uint32_t samples);
+                uint32_t samples,
+                uint32_t layers = 1,
+                VkImageViewType view_type = VK_IMAGE_VIEW_TYPE_MAX_ENUM);
   ~TransferImage() override;
 
   TransferImage* AsTransferImage() override { return this; }
   Result Initialize() override;
+
+  /// Lets a multisampled image take data from and give data to the host:
+  /// copies run as compute dispatches through a storage view of the image,
+  /// one sample after the other per texel. Must be called before Initialize();
+  /// the device needs shaderStorageImageMultisample.
+  void EnableMultisampleTransfer();
   VkImageView GetVkImageView() const { return view_; }
 
   void ImageBarrier(CommandBuffer* command_buffer,
@@ -69,6 +77,12 @@ class TransferImage : public Resource {
                                           uint32_t mip_level);
 
   VkImageViewType GetImageViewType() const;
+  Result CreateMultisampleTransfer();
+  void RecordMultisampleCopy(CommandBuffer* command_buffer,
+                             bool upload,
+                             VkImageLayout layout,
+                             VkAccessFlags access,
+                             VkPipelineStageFlags stage);
 
   /// An extra `VkBuffer` is used to facilitate the transfer of data from the
   /// host into the `VkImage` on the device.
@@ -89,6 +103,17 @@ class TransferImage : public Resource {
   uint32_t base_mip_level_;
   uint32_t used_mip_levels_;
   uint32_t samples_;
+  uint32_t layers_;
+  VkImageViewType view_type_;
+
+  bool multisample_transfer_ = false;
+  VkImageView storage_view_ = VK_NULL_HANDLE;
+  VkDescriptorSetLayout ms_set_layout_ = VK_NULL_HANDLE;
+  VkPipelineLayout ms_pipeline_layout_ = VK_NULL_HANDLE;
+  VkDescriptorPool ms_pool_ = VK_NULL_HANDLE;
+  VkDescriptorSet ms_set_ = VK_NULL_HANDLE;
+  VkPipeline ms_upload_ = VK_NULL_HANDLE;
+  VkPipeline ms_download_ = VK_NULL_HANDLE;
 };
 
 }  // namespace vulkan

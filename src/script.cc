@@ -282,6 +282,12 @@ bool Script::IsKnownFeature(const std::string& name) const {
          name == "FragmentShaderInterlockFeaturesEXT.fragmentShaderPixelInterlock" ||
          name == "FragmentShaderInterlockFeaturesEXT.fragmentShaderShadingRateInterlock" ||
          name == "ShaderImageFootprintFeaturesNV.imageFootprint" ||
+         name == "ShaderRelaxedExtendedInstructionFeaturesKHR."
+                 "shaderRelaxedExtendedInstruction" ||
+         name == "FragmentDensityMapFeaturesEXT.fragmentDensityMap" ||
+         name == "ShadingRateImageFeaturesNV.shadingRateImage" ||
+         name == "ComputeShaderDerivativesPropertiesKHR."
+                 "meshAndTaskShaderDerivatives" ||
          name == "SubgroupSupportedOperations.partitionedNV" ||
          name == "ShaderLongVectorFeaturesEXT.longVector";
 }

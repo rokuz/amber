@@ -163,6 +163,12 @@ with:
  * `FragmentShaderInterlockFeaturesEXT.fragmentShaderPixelInterlock`
  * `FragmentShaderInterlockFeaturesEXT.fragmentShaderShadingRateInterlock`
  * `ShaderImageFootprintFeaturesNV.imageFootprint`
+ * `ShaderRelaxedExtendedInstructionFeaturesKHR.shaderRelaxedExtendedInstruction`
+ * `FragmentDensityMapFeaturesEXT.fragmentDensityMap`
+ * `ShadingRateImageFeaturesNV.shadingRateImage`
+ * `ComputeShaderDerivativesPropertiesKHR.meshAndTaskShaderDerivatives` (a
+   property: the device must report `meshAndTaskShaderDerivatives`; it enables
+   nothing)
 
 A feature of an extension feature structure (such as `RayQueryFeaturesKHR`,
 `MeshShaderFeaturesEXT` or `DescriptorIndexingFeatures`) also enables the
@@ -406,6 +412,25 @@ attributes.
  * `DIM_1D` -- A 1-dimensional image
  * `DIM_2D` -- A 2-dimensional image
  * `DIM_3D` -- A 3-dimensional image
+ * `DIM_1D_ARRAY` -- An array of 1-dimensional images (`LAYERS` of them)
+ * `DIM_2D_ARRAY` -- An array of 2-dimensional images (`LAYERS` of them)
+ * `DIM_CUBE` -- A cube image: 6 square 2-dimensional faces, viewed as a cube
+ * `DIM_CUBE_ARRAY` -- An array of cube images; `LAYERS` counts faces and is a
+   multiple of 6
+
+The data of an image with layers holds one layer after the other (the faces of
+a cube in the order +X, -X, +Y, -Y, +Z, -Z). Descriptors view an image as its
+dimensionality says: `DIM_1D_ARRAY` and `DIM_2D_ARRAY` as arrays (also with a
+single layer), `DIM_CUBE` and `DIM_CUBE_ARRAY` as cubes.
+
+A multisampled image (`SAMPLES` greater than one) holds the samples of a texel
+one after the other: its data has `SAMPLES` values per texel. When it is bound
+as a descriptor (storage, sampled or combined image sampler), its data is
+copied to the device and back by compute dispatches through a storage view of
+the image, since buffer to image copies do not take multisampled images. This
+works for formats of 4, 8 or 16 bytes per texel and needs
+`DEVICE_FEATURE shaderStorageImageMultisample` (the format must support
+multisampled storage images).
 
 ```groovy
 # Specify an image buffer with a format. HEIGHT is necessary for DIM_2D and
@@ -413,7 +438,7 @@ attributes.
 IMAGE {name} FORMAT {format_string} [ MIP_LEVELS _mip_levels_ (default 1) ] \
     [ SAMPLES _samples_ (default 1) ] \
     {dimensionality} \
-    WIDTH {w} [ HEIGHT {h} [ DEPTH {d} ] ] \
+    WIDTH {w} [ HEIGHT {h} [ DEPTH {d} ] ] [ LAYERS {l} ] \
     {initializer}
 
 # Specify an image buffer with a data type. HEIGHT is necessary for DIM_2D and
@@ -1049,6 +1074,26 @@ contain image attachment content, depth/stencil content, uniform buffers, etc.
   # one sample.
   BIND BUFFER {buffer_name} AS resolve
 
+  # Capture transform feedback into |buffer_name|: it is bound as transform
+  # feedback buffer |xfb_buffer| (the `XfbBuffer` decoration of the outputs)
+  # and every draw of the pipeline runs between
+  # vkCmdBeginTransformFeedbackEXT and vkCmdEndTransformFeedbackEXT. The
+  # buffer keeps its data where nothing is captured and holds the captured
+  # data after the draw. Graphics pipelines only; the device needs
+  # `DEVICE_FEATURE TransformFeedbackFeaturesEXT.transformFeedback`.
+  BIND BUFFER {buffer_name} AS transform_feedback XFB_BUFFER _xfb_buffer_
+
+  # Attach the image |buffer_name| as input attachment |index| of the subpass
+  # and bind it as an input attachment descriptor (`subpassInput`) at the
+  # given descriptor set and binding. With BUFFER_ARRAY the images are input
+  # attachments |index|, |index| + 1, ... and fill the descriptor array in
+  # order. Each image must be a single-layer 2D `IMAGE` of the framebuffer
+  # size; its data is copied in before every draw and the subpass reads it in
+  # `VK_IMAGE_LAYOUT_GENERAL`. Several descriptors may read the same input
+  # attachment index, always from the same image. Graphics pipelines only.
+  BIND {BUFFER | BUFFER_ARRAY} {buffer_name} AS input_attachment \
+      INPUT_ATTACHMENT_INDEX _index_ DESCRIPTOR_SET _id_ BINDING _id_
+
   # Attach |buffer_name| as the push_constant buffer. There can be only one
   # push constant buffer attached to a pipeline.
   BIND BUFFER {buffer_name} AS push_constant
@@ -1137,6 +1182,9 @@ Ray tracing pipelines allow bind top level acceleration structures.
 
 ```groovy
   # Bind the top level acceleration structure at the given descriptor set and binding.
+  # Binding several structures (or one structure several times) to the same
+  # descriptor set and binding makes an array of acceleration structures, in
+  # the order of the BIND commands.
   BIND ACCELERATION_STRUCTURE {tlas_name} DESCRIPTOR_SET _set_id_ BINDING _id_
 ```
 
@@ -1192,6 +1240,18 @@ buffers for the pipeline populated with the specified data.
  * `TRIANGLE_STRIP_WITH_ADJACENCY`
  * `TRIANGLE_fan`
  * `PATCH_LIST`
+
+### Multiview
+
+```groovy
+  # Render |view_count| views (1 to 32) in one subpass with multiview: the
+  # subpass has the view mask (1 << |view_count|) - 1 and every color and
+  # depth/stencil attachment gets one layer per view, which its buffer holds
+  # one after the other (view 0 first). Shaders read the view in `ViewIndex`.
+  # Graphics pipelines without input attachments or resolve targets only; the
+  # device needs `DEVICE_FEATURE MultiviewFeatures.multiview`.
+  MULTIVIEW _view_count_
+```
 
 ### Run a pipeline.
 

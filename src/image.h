@@ -19,7 +19,16 @@
 
 namespace amber {
 
-enum class ImageDimension : int8_t { kUnknown = -1, k1D = 0, k2D = 1, k3D = 2 };
+enum class ImageDimension : int8_t {
+  kUnknown = -1,
+  k1D = 0,
+  k2D = 1,
+  k3D = 2,
+  k1DArray = 3,
+  k2DArray = 4,
+  kCube = 5,
+  kCubeArray = 6
+};
 
 }  // namespace amber
 

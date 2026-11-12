@@ -65,7 +65,11 @@ enum class BufferType : int8_t {
   /// A storage texel buffer.
   kStorageTexelBuffer,
   /// A resolve target.
-  kResolve
+  kResolve,
+  /// A transform feedback buffer.
+  kTransformFeedback,
+  /// An input attachment.
+  kInputAttachment
 };
 
 enum class InputRate : int8_t {
@@ -115,6 +119,10 @@ class Buffer {
   uint32_t GetDepth() const { return depth_; }
   /// Set the number of elements this buffer is deep.
   void SetDepth(uint32_t depth) { depth_ = depth; }
+  /// Get the number of array layers of an image buffer.
+  uint32_t GetLayers() const { return layers_; }
+  /// Set the number of array layers of an image buffer.
+  void SetLayers(uint32_t layers) { layers_ = layers; }
 
   /// Get the image dimensionality.
   ImageDimension GetImageDimension() const { return image_dim_; }
@@ -290,6 +298,7 @@ class Buffer {
   uint32_t width_ = 1;
   uint32_t height_ = 1;
   uint32_t depth_ = 1;
+  uint32_t layers_ = 1;
   uint32_t mip_levels_ = 1;
   uint32_t samples_ = 1;
   bool format_is_default_ = false;

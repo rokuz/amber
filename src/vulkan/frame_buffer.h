@@ -62,6 +62,22 @@ class FrameBuffer {
   uint32_t GetWidth() const { return width_; }
   uint32_t GetHeight() const { return height_; }
 
+  /// Adds images read as input attachments; must be called before
+  /// Initialize(). Their views follow the color, depth/stencil and resolve
+  /// attachments in the framebuffer.
+  void SetInputAttachments(
+      const std::vector<const amber::Pipeline::BufferInfo*>& inputs) {
+    input_attachments_ = inputs;
+  }
+  /// Gives every color and depth/stencil attachment one layer per view for
+  /// multiview rendering; must be called before Initialize().
+  void SetViewCount(uint32_t view_count) { view_count_ = view_count; }
+
+  /// Returns the view of the input attachment image |idx|.
+  VkImageView GetInputAttachmentView(size_t idx) const {
+    return input_images_[idx]->GetVkImageView();
+  }
+
  private:
   void ChangeFrameLayout(CommandBuffer* command,
                          VkImageLayout color_layout,
@@ -72,6 +88,8 @@ class FrameBuffer {
   Device* device_ = nullptr;
   std::vector<const amber::Pipeline::BufferInfo*> color_attachments_;
   std::vector<const amber::Pipeline::BufferInfo*> resolve_targets_;
+  std::vector<const amber::Pipeline::BufferInfo*> input_attachments_;
+  std::vector<std::unique_ptr<TransferImage>> input_images_;
   amber::Pipeline::BufferInfo depth_stencil_attachment_;
   VkFramebuffer frame_ = VK_NULL_HANDLE;
   std::vector<std::unique_ptr<TransferImage>> color_images_;
@@ -80,6 +98,7 @@ class FrameBuffer {
   uint32_t width_ = 0;
   uint32_t height_ = 0;
   uint32_t depth_ = 1;
+  uint32_t view_count_ = 0;
 };
 
 }  // namespace vulkan
