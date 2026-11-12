@@ -550,6 +550,10 @@ class Pipeline {
   void SetCreateFlags(uint32_t flags) { create_flags_ = flags; }
   uint32_t GetCreateFlags() const { return create_flags_; }
 
+  /// Creates the ray tracing pipeline and traces rays with VK_NV_ray_tracing.
+  void SetRayTracingNV(bool nv) { ray_tracing_nv_ = nv; }
+  bool IsRayTracingNV() const { return ray_tracing_nv_; }
+
   void AddPipelineLibrary(Pipeline* pipeline) { libs_.push_back(pipeline); }
   const std::vector<Pipeline*>& GetPipelineLibraries() const { return libs_; }
 
@@ -600,6 +604,7 @@ class Pipeline {
   uint32_t max_pipeline_ray_hit_attribute_size_ = 0;
   uint32_t max_pipeline_ray_recursion_depth_ = 1;
   uint32_t create_flags_ = 0;
+  bool ray_tracing_nv_ = false;
   std::vector<Pipeline*> libs_;
 };
 

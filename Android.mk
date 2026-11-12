@@ -66,6 +66,7 @@ LOCAL_SRC_FILES:= \
     src/vulkan/graphics_pipeline.cc \
     src/vulkan/image_descriptor.cc \
     src/vulkan/index_buffer.cc \
+    src/vulkan/nv_acceleration_structure.cc \
     src/vulkan/pipeline.cc \
     src/vulkan/push_constant.cc \
     src/vulkan/raytracing_pipeline.cc \

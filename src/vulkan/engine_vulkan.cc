@@ -222,6 +222,7 @@ Result EngineVulkan::CreatePipeline(amber::Pipeline* pipeline) {
         device_.get(), &blases_, &tlases_, engine_data.fence_timeout_ms,
         engine_data.pipeline_runtime_layer_enabled, stage_create_info,
         pipeline->GetCreateFlags());
+    vk_pipeline->AsRayTracingPipeline()->SetNV(pipeline->IsRayTracingNV());
     r = vk_pipeline->AsRayTracingPipeline()->Initialize(
         pool_.get(), shader_group_create_info);
   } else if (pipeline->GetType() == PipelineType::kCompute) {

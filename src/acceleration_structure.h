@@ -170,9 +170,20 @@ class TLAS {
     return blas_instances_;
   }
 
+  /// Builds the structure with VK_NV_ray_tracing_motion_blur motion instances.
+  void SetMotion(bool motion) { motion_ = motion; }
+  bool IsMotion() const { return motion_; }
+
+  /// Builds the structure and its bottom level structures with
+  /// VK_NV_ray_tracing instead of VK_KHR_acceleration_structure.
+  void SetNV(bool nv) { nv_ = nv; }
+  bool IsNV() const { return nv_; }
+
  private:
   std::string name_;
   std::vector<std::unique_ptr<BLASInstance>> blas_instances_;
+  bool motion_ = false;
+  bool nv_ = false;
 };
 
 class ShaderGroup {

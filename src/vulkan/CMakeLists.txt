@@ -28,6 +28,7 @@ set(VULKAN_ENGINE_SOURCES
     graphics_pipeline.cc
     image_descriptor.cc
     index_buffer.cc
+    nv_acceleration_structure.cc
     pipeline.cc
     push_constant.cc
     raytracing_pipeline.cc

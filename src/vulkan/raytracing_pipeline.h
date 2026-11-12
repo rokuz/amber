@@ -41,6 +41,8 @@ class RayTracingPipeline : public Pipeline {
 
   Result AddTLASDescriptor(const TLASCommand* cmd);
 
+  void SetNV(bool nv) { nv_ = nv; }
+
   Result Initialize(CommandPool* pool,
                     std::vector<VkRayTracingShaderGroupCreateInfoKHR>&
                         shader_group_create_info);
@@ -79,7 +81,12 @@ class RayTracingPipeline : public Pipeline {
                                     uint32_t maxPipelineRayHitAttributeSize,
                                     uint32_t maxPipelineRayRecursionDepth);
 
+  Result CreateVkRayTracingPipelineNV(const VkPipelineLayout& pipeline_layout,
+                                      VkPipeline* pipeline,
+                                      uint32_t maxPipelineRayRecursionDepth);
+
   std::vector<VkRayTracingShaderGroupCreateInfoKHR> shader_group_create_info_;
+  bool nv_ = false;
   BlasesMap* blases_;
   TlasesMap* tlases_;
   SbtsMap sbtses_;

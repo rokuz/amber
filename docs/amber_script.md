@@ -568,6 +568,25 @@ If |flags| is a space-separated list it should not be ended with END statement.
 The |transform| is 12 space-separated values describing a 3x4 row-major affine transformation matrix applied to
 the acceleration structure.
 
+A top level acceleration structure block may also contain:
+
+```groovy
+  # Build with VK_NV_ray_tracing_motion_blur: VK_ACCELERATION_STRUCTURE_CREATE_MOTION_BIT_NV,
+  # VkAccelerationStructureMotionInfoNV and VK_BUILD_ACCELERATION_STRUCTURE_MOTION_BIT_NV,
+  # with every instance stored as a static VkAccelerationStructureMotionInstanceNV.
+  MOTION
+
+  # Build the structure and the bottom level structures of its instances with
+  # VK_NV_ray_tracing (vkCreateAccelerationStructureNV, vkCmdBuildAccelerationStructureNV).
+  # It is bound as VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV and has no device address.
+  # The default is KHR.
+  API {KHR | NV}
+```
+
+`OpTraceRayMotionNV` needs a `MOTION` structure traced from a pipeline with
+`FLAGS ALLOW_MOTION`. A module with the `RayTracingNV` capability expects
+`VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV` descriptors, so its structures use `API NV`.
+
 #### Acceleration structure addresses
 
 Shaders can turn a 64-bit device address into an acceleration structure with
@@ -728,6 +747,19 @@ or multiline version:
 Pipeline `FLAGS` can contain:
 
  * `LIBRARY`
+ * `ALLOW_MOTION` (`VK_PIPELINE_CREATE_RAY_TRACING_ALLOW_MOTION_BIT_NV`)
+ * <any integer number>
+
+A ray tracing pipeline is created with `vkCreateRayTracingPipelinesKHR` and
+traced with `vkCmdTraceRaysKHR`. With
+
+```groovy
+  API NV
+```
+
+it is created with `vkCreateRayTracingPipelinesNV` and traced with
+`vkCmdTraceRaysNV` (VK_NV_ray_tracing); such a pipeline can not be or use a
+library and can not allow motion.
 
 Ray tracing pipeline can include one or more pipeline libraries:
 

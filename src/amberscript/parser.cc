@@ -765,6 +765,14 @@ Result Parser::ParsePipelineBody(const std::string& cmd_name,
       r = ParseFlags(pipeline.get());
     } else if (tok == "USE_LIBRARY") {
       r = ParseUseLibrary(pipeline.get());
+    } else if (tok == "API") {
+      if (!pipeline->IsRayTracing()) {
+        r = Result("API is allowed only for ray tracing pipeline");
+      } else {
+        bool nv = false;
+        r = ParseRayTracingApi(&nv);
+        pipeline->SetRayTracingNV(nv);
+      }
     } else {
       r = Result("unknown token in pipeline block: " + tok);
     }
@@ -775,6 +783,17 @@ Result Parser::ParsePipelineBody(const std::string& cmd_name,
 
   if (!token->IsIdentifier() || token->AsString() != "END") {
     return Result(cmd_name + " missing END command");
+  }
+
+  if (pipeline->IsRayTracingNV()) {
+    const uint32_t flags = pipeline->GetCreateFlags();
+    if ((flags & VK_PIPELINE_CREATE_LIBRARY_BIT_KHR) != 0 ||
+        !pipeline->GetPipelineLibraries().empty()) {
+      return Result("NV ray tracing pipelines do not support libraries");
+    }
+    if ((flags & VK_PIPELINE_CREATE_RAY_TRACING_ALLOW_MOTION_BIT_NV) != 0) {
+      return Result("NV ray tracing pipelines do not support motion");
+    }
   }
 
   Result r = script_->AddPipeline(std::move(pipeline));
@@ -4659,6 +4678,12 @@ Result Parser::ParseAddressTLAS(TLAS** tlas) {
     return Result("unknown top level acceleration structure: " +
                   token->AsString());
   }
+  if ((*tlas)->IsNV()) {
+    return Result(
+        "acceleration structures built with the NV API have no device "
+        "address: " +
+        token->AsString());
+  }
   return {};
 }
 
@@ -4945,6 +4970,13 @@ Result Parser::ParseTLAS() {
     }
     if (tok == "BOTTOM_LEVEL_INSTANCE") {
       r = ParseBLASInstance(tlas.get());
+    } else if (tok == "MOTION") {
+      tlas->SetMotion(true);
+      r = ValidateEndOfStatement("MOTION command");
+    } else if (tok == "API") {
+      bool nv = false;
+      r = ParseRayTracingApi(&nv);
+      tlas->SetNV(nv);
     } else {
       r = Result("unknown token: " + tok);
     }
@@ -4952,6 +4984,11 @@ Result Parser::ParseTLAS() {
     if (!r.IsSuccess()) {
       return r;
     }
+  }
+
+  if (tlas->IsMotion() && tlas->IsNV()) {
+    return Result(
+        "a motion acceleration structure can not be built with the NV API");
   }
 
   Result r = script_->AddTLAS(std::move(tlas));
@@ -5328,6 +5365,8 @@ Result Parser::ParseFlags(Pipeline* pipeline) {
         break;
       } else if (token->AsString() == "LIBRARY") {
         flags |= VK_PIPELINE_CREATE_LIBRARY_BIT_KHR;
+      } else if (token->AsString() == "ALLOW_MOTION") {
+        flags |= VK_PIPELINE_CREATE_RAY_TRACING_ALLOW_MOTION_BIT_NV;
       } else {
         return Result("Unknown flag: " + token->AsString());
       }
@@ -5345,6 +5384,21 @@ Result Parser::ParseFlags(Pipeline* pipeline) {
   }
 
   return {};
+}
+
+Result Parser::ParseRayTracingApi(bool* nv) {
+  auto token = tokenizer_->NextToken();
+  if (!token->IsIdentifier()) {
+    return Result("API requires KHR or NV");
+  }
+  if (token->AsString() == "KHR") {
+    *nv = false;
+  } else if (token->AsString() == "NV") {
+    *nv = true;
+  } else {
+    return Result("unknown ray tracing API: " + token->AsString());
+  }
+  return ValidateEndOfStatement("API command");
 }
 
 Result Parser::ParseUseLibrary(Pipeline* pipeline) {

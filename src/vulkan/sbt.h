@@ -31,9 +31,10 @@ class SBT {
   explicit SBT(Device* device);
   ~SBT();
 
-  Result Create(amber::SBT* sbt, VkPipeline pipeline);
+  Result Create(amber::SBT* sbt, VkPipeline pipeline, bool nv);
   TransferBuffer* getBuffer() { return buffer_.get(); }
   VkDeviceAddress GetDeviceAddress() const { return address_; }
+  VkDeviceSize GetOffset() const { return offset_; }
   VkDeviceSize GetStride() const { return stride_; }
   VkDeviceSize GetSize() const { return size_; }
 
@@ -41,6 +42,7 @@ class SBT {
   Device* device_ = nullptr;
   std::unique_ptr<TransferBuffer> buffer_;
   VkDeviceAddress address_ = 0;
+  VkDeviceSize offset_ = 0;
   VkDeviceSize stride_ = 0;
   VkDeviceSize size_ = 0;
 };

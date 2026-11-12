@@ -32,7 +32,7 @@ VkDeviceSize AlignUp(VkDeviceSize value, VkDeviceSize alignment) {
 
 SBT::SBT(Device* device) : device_(device) {}
 
-Result SBT::Create(amber::SBT* sbt, VkPipeline pipeline) {
+Result SBT::Create(amber::SBT* sbt, VkPipeline pipeline, bool nv) {
   uint32_t handles_count = 0;
   uint32_t record_size = 0;
   for (auto& x : sbt->GetSBTRecords()) {
@@ -52,7 +52,9 @@ Result SBT::Create(amber::SBT* sbt, VkPipeline pipeline) {
       std::max(1u, device_->GetRayTracingShaderGroupHandleAlignment());
   const VkDeviceSize base_alignment =
       std::max(1u, device_->GetRayTracingShaderGroupBaseAlignment());
-  stride_ = AlignUp(handle_size + record_size, handle_alignment);
+  stride_ = AlignUp(handle_size + record_size,
+                    nv ? std::max<VkDeviceSize>(handle_alignment, handle_size)
+                       : handle_alignment);
 
   const uint32_t max_stride = device_->GetRayTracingMaxShaderGroupStride();
   if (record_size > 0 && max_stride > 0 && stride_ > max_stride) {
@@ -65,10 +67,15 @@ Result SBT::Create(amber::SBT* sbt, VkPipeline pipeline) {
 
   buffer_ = std::make_unique<TransferBuffer>(
       device_, static_cast<uint32_t>(buffer_size), nullptr);
-  buffer_->AddUsageFlags(VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                         VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR |
-                         VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-  buffer_->AddAllocateFlags(VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT);
+  if (nv) {
+    buffer_->AddUsageFlags(VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                           VK_BUFFER_USAGE_RAY_TRACING_BIT_NV);
+  } else {
+    buffer_->AddUsageFlags(VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                           VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR |
+                           VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+    buffer_->AddAllocateFlags(VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT);
+  }
   Result r = buffer_->Initialize();
   if (!r.IsSuccess()) {
     return r;
@@ -79,6 +86,9 @@ Result SBT::Create(amber::SBT* sbt, VkPipeline pipeline) {
     const uint32_t index = x->GetIndex();
     const uint32_t count = x->GetCount();
     if (index != static_cast<uint32_t>(-1)) {
+      if (device_->GetPtrs()->vkGetRayTracingShaderGroupHandlesKHR == nullptr) {
+        return Result("vkGetRayTracingShaderGroupHandlesKHR is not available");
+      }
       VkResult vr = device_->GetPtrs()->vkGetRayTracingShaderGroupHandlesKHR(
           device_->GetVkDevice(), pipeline, index, count, count * handle_size,
           &handles[start * handle_size]);
@@ -91,19 +101,25 @@ Result SBT::Create(amber::SBT* sbt, VkPipeline pipeline) {
     start += count;
   }
 
-  const VkBufferDeviceAddressInfo address_info = {
-      VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR,
-      nullptr,
-      buffer_->GetVkBuffer(),
-  };
-  const VkDeviceAddress buffer_address =
-      device_->GetPtrs()->vkGetBufferDeviceAddress(device_->GetVkDevice(),
-                                                   &address_info);
-  address_ = AlignUp(buffer_address, base_alignment);
+  if (nv) {
+    address_ = 0;
+    offset_ = 0;
+  } else {
+    const VkBufferDeviceAddressInfo address_info = {
+        VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR,
+        nullptr,
+        buffer_->GetVkBuffer(),
+    };
+    const VkDeviceAddress buffer_address =
+        device_->GetPtrs()->vkGetBufferDeviceAddress(device_->GetVkDevice(),
+                                                     &address_info);
+    address_ = AlignUp(buffer_address, base_alignment);
+    offset_ = address_ - buffer_address;
+  }
 
   uint8_t* memory = static_cast<uint8_t*>(buffer_->HostAccessibleMemoryPtr());
   memset(memory, 0, static_cast<size_t>(buffer_size));
-  uint8_t* table = memory + (address_ - buffer_address);
+  uint8_t* table = memory + offset_;
 
   start = 0;
   for (auto& x : sbt->GetSBTRecords()) {

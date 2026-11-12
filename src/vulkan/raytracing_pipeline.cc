@@ -73,6 +73,11 @@ Result RayTracingPipeline::CreateVkRayTracingPipeline(
     uint32_t maxPipelineRayPayloadSize,
     uint32_t maxPipelineRayHitAttributeSize,
     uint32_t maxPipelineRayRecursionDepth) {
+  if (nv_) {
+    return CreateVkRayTracingPipelineNV(pipeline_layout, pipeline,
+                                        maxPipelineRayRecursionDepth);
+  }
+
   std::vector<VkPipelineShaderStageCreateInfo> shader_stage_info =
       GetVkShaderStageInfo();
 
@@ -115,6 +120,54 @@ Result RayTracingPipeline::CreateVkRayTracingPipeline(
   return {};
 }
 
+Result RayTracingPipeline::CreateVkRayTracingPipelineNV(
+    const VkPipelineLayout& pipeline_layout,
+    VkPipeline* pipeline,
+    uint32_t maxPipelineRayRecursionDepth) {
+  if (device_->GetPtrs()->vkCreateRayTracingPipelinesNV == nullptr ||
+      device_->GetPtrs()->vkCmdTraceRaysNV == nullptr) {
+    return Result("Vulkan: NV ray tracing pipelines require VK_NV_ray_tracing");
+  }
+
+  std::vector<VkPipelineShaderStageCreateInfo> shader_stage_info =
+      GetVkShaderStageInfo();
+  for (auto& info : shader_stage_info) {
+    info.pName = GetEntryPointName(info.stage);
+  }
+
+  std::vector<VkRayTracingShaderGroupCreateInfoNV> groups;
+  for (const auto& group : shader_group_create_info_) {
+    VkRayTracingShaderGroupCreateInfoNV nv_group = {};
+    nv_group.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_NV;
+    nv_group.type = group.type;
+    nv_group.generalShader = group.generalShader;
+    nv_group.closestHitShader = group.closestHitShader;
+    nv_group.anyHitShader = group.anyHitShader;
+    nv_group.intersectionShader = group.intersectionShader;
+    groups.push_back(nv_group);
+  }
+
+  VkRayTracingPipelineCreateInfoNV create_info = {};
+  create_info.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_NV;
+  create_info.flags = create_flags_;
+  create_info.stageCount = static_cast<uint32_t>(shader_stage_info.size());
+  create_info.pStages = shader_stage_info.data();
+  create_info.groupCount = static_cast<uint32_t>(groups.size());
+  create_info.pGroups = groups.data();
+  create_info.maxRecursionDepth = maxPipelineRayRecursionDepth;
+  create_info.layout = pipeline_layout;
+  create_info.basePipelineIndex = -1;
+
+  VkResult r = device_->GetPtrs()->vkCreateRayTracingPipelinesNV(
+      device_->GetVkDevice(), VK_NULL_HANDLE, 1u, &create_info, nullptr,
+      pipeline);
+  if (r != VK_SUCCESS) {
+    return Result("Vulkan::Calling vkCreateRayTracingPipelinesNV Fail");
+  }
+
+  return {};
+}
+
 Result RayTracingPipeline::getVulkanSBTRegion(
     VkPipeline pipeline,
     amber::SBT* aSBT,
@@ -130,7 +183,7 @@ Result RayTracingPipeline::getVulkanSBTRegion(
 
       vSBT = sbt_vulkan.first->second;
 
-      Result r = vSBT->Create(aSBT, pipeline);
+      Result r = vSBT->Create(aSBT, pipeline, nv_);
       if (!r.IsSuccess()) {
         return r;
       }
@@ -229,7 +282,10 @@ Result RayTracingPipeline::TraceRays(amber::SBT* rSBT,
       i.second->BuildBLAS(GetCommandBuffer());
     }
     for (auto& i : *tlases_) {
-      i.second->BuildTLAS(GetCommandBuffer()->GetVkCommandBuffer());
+      Result tlas_result = i.second->BuildTLAS(GetCommandBuffer());
+      if (!tlas_result.IsSuccess()) {
+        return tlas_result;
+      }
     }
 
     BindVkDescriptorSets(pipeline_layout_);
@@ -268,9 +324,41 @@ Result RayTracingPipeline::TraceRays(amber::SBT* rSBT,
       return r;
     }
 
-    device_->GetPtrs()->vkCmdTraceRaysKHR(command_->GetVkCommandBuffer(),
-                                          &rSBTRegion, &mSBTRegion, &hSBTRegion,
-                                          &cSBTRegion, x, y, z);
+    if (nv_) {
+      if (x == 0 || y == 0 || z == 0) {
+        return Result("Vulkan: NV ray tracing needs a non-empty launch size");
+      }
+      auto table = [this](amber::SBT* sbt, VkBuffer* buffer,
+                          VkDeviceSize* offset, VkDeviceSize* stride) {
+        *buffer = VK_NULL_HANDLE;
+        *offset = 0;
+        *stride = 0;
+        auto found = sbtses_.find(sbt);
+        if (sbt != nullptr && found != sbtses_.end()) {
+          *buffer = found->second->getBuffer()->GetVkBuffer();
+          *offset = found->second->GetOffset();
+          *stride = found->second->GetStride();
+        }
+      };
+      VkBuffer buffers[4];
+      VkDeviceSize offsets[4];
+      VkDeviceSize strides[4];
+      amber::SBT* tables[4] = {rSBT, mSBT, hSBT, cSBT};
+      for (size_t i = 0; i < 4; ++i) {
+        table(tables[i], &buffers[i], &offsets[i], &strides[i]);
+      }
+      if (buffers[0] == VK_NULL_HANDLE) {
+        return Result("Vulkan: NV ray tracing needs a ray generation table");
+      }
+      device_->GetPtrs()->vkCmdTraceRaysNV(
+          command_->GetVkCommandBuffer(), buffers[0], offsets[0], buffers[1],
+          offsets[1], strides[1], buffers[2], offsets[2], strides[2],
+          buffers[3], offsets[3], strides[3], x, y, z);
+    } else {
+      device_->GetPtrs()->vkCmdTraceRaysKHR(command_->GetVkCommandBuffer(),
+                                            &rSBTRegion, &mSBTRegion,
+                                            &hSBTRegion, &cSBTRegion, x, y, z);
+    }
     BeginTimerQuery();
     r = guard.Submit(GetFenceTimeout(), GetPipelineRuntimeLayerEnabled());
     EndTimerQuery();

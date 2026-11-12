@@ -373,7 +373,10 @@ supports the script's requirements. Pick another with `-D <ID>` (the index in
 `vkEnumeratePhysicalDevices` order) or `--device-name <substring>` (the first
 device whose `deviceName` contains the substring, ignoring ASCII case; if none
 matches, Amber lists the available devices and exits with an error). Both apply
-to `-V` as well, which prints the selected device's properties:
+to `-V` as well, which prints the selected device's properties (including one
+`cooperativeMatrix:` line per `VkCooperativeMatrixPropertiesKHR` when the device
+supports VK_KHR_cooperative_matrix, with the `VkComponentTypeKHR` and
+`VkScopeKHR` values as numbers):
 
 ```
 out/Debug/amber -V --device-name nvidia

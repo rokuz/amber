@@ -14,10 +14,21 @@
 // limitations under the License.
 
 #include "src/vulkan/tlas.h"
+
+#include <algorithm>
+#include <cstring>
+
 #include "src/vulkan/blas.h"
+#include "src/vulkan/command_buffer.h"
 
 namespace amber {
 namespace vulkan {
+
+namespace {
+
+const size_t kMotionInstanceStride = 160;
+
+}  // namespace
 
 static VkTransformMatrixKHR makeVkMatrix(const float* m) {
   const VkTransformMatrixKHR identityMatrix3x4 = {{{1.0f, 0.0f, 0.0f, 0.0f},
@@ -47,6 +58,19 @@ Result TLAS::CreateTLAS(amber::TLAS* tlas, BlasesMap* blases) {
 
   assert(tlas != nullptr);
 
+  if (tlas->IsNV()) {
+    if (nv_ != nullptr) {
+      return {};
+    }
+    nv_ = std::make_unique<NVAccelerationStructure>(device_);
+    return nv_->CreateTopLevel(tlas);
+  }
+
+  const bool motion = tlas->IsMotion();
+  const size_t instance_stride =
+      motion ? kMotionInstanceStride
+             : sizeof(VkAccelerationStructureInstanceKHR);
+
   VkDeviceOrHostAddressConstKHR const_default_ptr;
   VkDeviceOrHostAddressKHR default_ptr;
 
@@ -56,7 +80,7 @@ Result TLAS::CreateTLAS(amber::TLAS* tlas, BlasesMap* blases) {
   instances_count_ = static_cast<uint32_t>(tlas->GetInstances().size());
 
   const uint32_t ib_size =
-      uint32_t(instances_count_ * sizeof(VkAccelerationStructureInstanceKHR));
+      std::max(1u, uint32_t(instances_count_ * instance_stride));
 
   instance_buffer_ =
       std::make_unique<TransferBuffer>(device_, ib_size, nullptr);
@@ -66,9 +90,9 @@ Result TLAS::CreateTLAS(amber::TLAS* tlas, BlasesMap* blases) {
   instance_buffer_->AddAllocateFlags(VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT);
   instance_buffer_->Initialize();
 
-  VkAccelerationStructureInstanceKHR* instances_ptr =
-      reinterpret_cast<VkAccelerationStructureInstanceKHR*>(
-          instance_buffer_->HostAccessibleMemoryPtr());
+  uint8_t* instances_ptr =
+      static_cast<uint8_t*>(instance_buffer_->HostAccessibleMemoryPtr());
+  std::memset(instances_ptr, 0, ib_size);
 
   for (auto& instance : tlas->GetInstances()) {
     auto blas = instance->GetUsedBLAS();
@@ -95,7 +119,7 @@ Result TLAS::CreateTLAS(amber::TLAS* tlas, BlasesMap* blases) {
     VkDeviceAddress accelerationStructureAddress =
         blas_vulkan_ptr->getVkBLASDeviceAddress();
 
-    *instances_ptr = VkAccelerationStructureInstanceKHR{
+    const VkAccelerationStructureInstanceKHR vk_instance{
         makeVkMatrix(instance->GetTransform()),
         instance->GetInstanceIndex(),
         instance->GetMask(),
@@ -103,7 +127,18 @@ Result TLAS::CreateTLAS(amber::TLAS* tlas, BlasesMap* blases) {
         instance->GetFlags(),
         static_cast<uint64_t>(accelerationStructureAddress)};
 
-    instances_ptr++;
+    if (motion) {
+      VkAccelerationStructureMotionInstanceNV motion_instance = {};
+      motion_instance.type =
+          VK_ACCELERATION_STRUCTURE_MOTION_INSTANCE_TYPE_STATIC_NV;
+      motion_instance.flags = 0;
+      motion_instance.data.staticInstance = vk_instance;
+      std::memcpy(instances_ptr, &motion_instance, sizeof(motion_instance));
+    } else {
+      std::memcpy(instances_ptr, &vk_instance, sizeof(vk_instance));
+    }
+
+    instances_ptr += instance_stride;
   }
 
   VkAccelerationStructureGeometryInstancesDataKHR
@@ -128,7 +163,9 @@ Result TLAS::CreateTLAS(amber::TLAS* tlas, BlasesMap* blases) {
       VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
       nullptr,
       VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR,
-      0,
+      motion ? static_cast<VkBuildAccelerationStructureFlagsKHR>(
+                   VK_BUILD_ACCELERATION_STRUCTURE_MOTION_BIT_NV)
+             : 0u,
       VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR,
       VK_NULL_HANDLE,
       VK_NULL_HANDLE,
@@ -161,11 +198,16 @@ Result TLAS::CreateTLAS(amber::TLAS* tlas, BlasesMap* blases) {
   buffer_->AddAllocateFlags(VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT);
   buffer_->Initialize();
 
+  motion_info_ = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_MOTION_INFO_NV,
+                  nullptr, instances_count_, 0};
+
   const VkAccelerationStructureCreateInfoKHR
       accelerationStructureCreateInfoKHR = {
           VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
-          nullptr,
-          0,
+          motion ? &motion_info_ : nullptr,
+          motion ? static_cast<VkAccelerationStructureCreateFlagsKHR>(
+                       VK_ACCELERATION_STRUCTURE_CREATE_MOTION_BIT_NV)
+                 : 0u,
           buffer_->GetVkBuffer(),
           0,
           as_size,
@@ -201,7 +243,11 @@ Result TLAS::CreateTLAS(amber::TLAS* tlas, BlasesMap* blases) {
   return {};
 }
 
-Result TLAS::BuildTLAS(VkCommandBuffer cmdBuffer) {
+Result TLAS::BuildTLAS(CommandBuffer* command_buffer) {
+  if (nv_ != nullptr) {
+    return nv_->Build(command_buffer);
+  }
+  VkCommandBuffer cmdBuffer = command_buffer->GetVkCommandBuffer();
   if (tlas_ == VK_NULL_HANDLE) {
     return Result("Acceleration structure should be created first");
   }
@@ -237,6 +283,10 @@ Result TLAS::BuildTLAS(VkCommandBuffer cmdBuffer) {
   built_ = true;
 
   return {};
+}
+
+VkAccelerationStructureNV TLAS::GetVkTLASNV() const {
+  return nv_ != nullptr ? nv_->GetVkAccelerationStructure() : VK_NULL_HANDLE;
 }
 
 VkDeviceAddress TLAS::GetVkTLASDeviceAddress() {

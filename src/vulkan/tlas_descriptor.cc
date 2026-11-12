@@ -55,6 +55,34 @@ Result TLASDescriptor::CreateResourceIfNeeded() {
 
 void TLASDescriptor::UpdateDescriptorSetIfNeeded(
     VkDescriptorSet descriptor_set) {
+  if (type_ == DescriptorType::kTLASNV) {
+    std::vector<VkAccelerationStructureNV> nv;
+    for (auto& amber_tlas : amber_tlases_) {
+      auto vulkan_tlas = tlases_->find(amber_tlas);
+      assert(vulkan_tlas != tlases_->end());
+      nv.push_back(vulkan_tlas->second->GetVkTLASNV());
+    }
+
+    VkWriteDescriptorSetAccelerationStructureNV write_nv = {};
+    write_nv.sType =
+        VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_NV;
+    write_nv.accelerationStructureCount = static_cast<uint32_t>(nv.size());
+    write_nv.pAccelerationStructures = nv.data();
+
+    VkWriteDescriptorSet write = VkWriteDescriptorSet();
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.pNext = &write_nv;
+    write.dstSet = descriptor_set;
+    write.dstBinding = binding_;
+    write.dstArrayElement = 0;
+    write.descriptorCount = static_cast<uint32_t>(nv.size());
+    write.descriptorType = GetVkDescriptorType();
+
+    device_->GetPtrs()->vkUpdateDescriptorSets(device_->GetVkDevice(), 1,
+                                               &write, 0, nullptr);
+    return;
+  }
+
   std::vector<VkAccelerationStructureKHR> as;
 
   for (auto& amber_tlas : amber_tlases_) {

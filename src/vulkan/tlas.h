@@ -17,13 +17,17 @@
 #define SRC_VULKAN_TLAS_H_
 
 #include <memory>
+#include <vector>
 
 #include "src/acceleration_structure.h"
 #include "src/vulkan/device.h"
+#include "src/vulkan/nv_acceleration_structure.h"
 #include "src/vulkan/transfer_buffer.h"
 
 namespace amber {
 namespace vulkan {
+
+class CommandBuffer;
 
 class TLAS {
  public:
@@ -31,8 +35,10 @@ class TLAS {
   ~TLAS();
 
   Result CreateTLAS(amber::TLAS* tlas, BlasesMap* blases);
-  Result BuildTLAS(VkCommandBuffer cmdBuffer);
+  Result BuildTLAS(CommandBuffer* command_buffer);
   VkAccelerationStructureKHR GetVkTLAS() { return tlas_; }
+  VkAccelerationStructureNV GetVkTLASNV() const;
+  bool IsNV() const { return nv_ != nullptr; }
   VkDeviceAddress GetVkTLASDeviceAddress();
 
  private:
@@ -46,6 +52,8 @@ class TLAS {
   VkAccelerationStructureGeometryKHR accelerationStructureGeometryKHR_;
   VkAccelerationStructureBuildGeometryInfoKHR
       accelerationStructureBuildGeometryInfoKHR_;
+  VkAccelerationStructureMotionInfoNV motion_info_ = {};
+  std::unique_ptr<NVAccelerationStructure> nv_;
 };
 
 }  // namespace vulkan

@@ -1928,6 +1928,31 @@ void ConfigHelperVulkan::DumpPhysicalDeviceInfo() {
                 << std::endl;
     }
   }
+  if (supports_.cooperative_matrix) {
+    auto get_cooperative_matrix_properties =
+        reinterpret_cast<PFN_vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR>(
+            vkGetInstanceProcAddr(
+                vk_.instance,
+                "vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR"));
+    if (get_cooperative_matrix_properties) {
+      uint32_t count = 0;
+      get_cooperative_matrix_properties(vk_.physical_device, &count, nullptr);
+      VkCooperativeMatrixPropertiesKHR empty{};
+      empty.sType = VK_STRUCTURE_TYPE_COOPERATIVE_MATRIX_PROPERTIES_KHR;
+      std::vector<VkCooperativeMatrixPropertiesKHR> matrices(count, empty);
+      if (count > 0 &&
+          get_cooperative_matrix_properties(vk_.physical_device, &count,
+                                            matrices.data()) == VK_SUCCESS) {
+        for (const auto& m : matrices) {
+          std::cout << "  cooperativeMatrix: M=" << m.MSize << " N=" << m.NSize
+                    << " K=" << m.KSize << " A=" << m.AType << " B=" << m.BType
+                    << " C=" << m.CType << " Result=" << m.ResultType
+                    << " saturating=" << m.saturatingAccumulation
+                    << " scope=" << m.scope << std::endl;
+        }
+      }
+    }
+  }
   std::cout << "End of physical device properties." << std::endl;
 }
 

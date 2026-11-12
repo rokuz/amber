@@ -110,7 +110,10 @@ Result ComputePipeline::Compute(uint32_t x,
       i.second->BuildBLAS(GetCommandBuffer());
     }
     for (auto& i : *tlases_) {
-      i.second->BuildTLAS(GetCommandBuffer()->GetVkCommandBuffer());
+      Result tlas_result = i.second->BuildTLAS(GetCommandBuffer());
+      if (!tlas_result.IsSuccess()) {
+        return tlas_result;
+      }
     }
 
     BindVkDescriptorSets(pipeline_layout);

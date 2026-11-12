@@ -117,6 +117,7 @@ class Parser : public amber::Parser {
   Result ParseMaxRayRecursionDepth(Pipeline* pipeline);
   Result ParseFlags(Pipeline* pipeline);
   Result ParseUseLibrary(Pipeline* pipeline);
+  Result ParseRayTracingApi(bool* nv);
   Result ParseTolerances(std::vector<Probe::Tolerance>* tolerances);
 
   /// Parses a set of values out of the token stream. |name| is the name of the

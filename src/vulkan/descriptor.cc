@@ -57,6 +57,8 @@ VkDescriptorType Descriptor::GetVkDescriptorType() const {
       return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
     case DescriptorType::kTLAS:
       return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+    case DescriptorType::kTLASNV:
+      return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV;
     default:
       assert(type_ == DescriptorType::kSampledImage);
       return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;

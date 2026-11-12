@@ -96,8 +96,7 @@ def gen_wrappers(methods, xml):
       call_prefix = return_type + ' ' + return_variable + ' = '
     nullptr_check = ''
     if optional:
-      nullptr_check = '''ptrs_.{} = nullptr;
-    return Result();'''.format(method)
+      nullptr_check = 'ptrs_.{} = nullptr;'.format(method)
     else:
       nullptr_check = 'return Result("Vulkan: Unable to load {} pointer");'.format(method)
       
@@ -105,8 +104,7 @@ def gen_wrappers(methods, xml):
   PFN_${method} ptr = reinterpret_cast<PFN_${method}>(getInstanceProcAddr(instance_, "${method}"));
   if (!ptr) {
     ${nullptr_check}
-  }
-  if (delegate && delegate->LogGraphicsCalls()) {
+  } else if (delegate && delegate->LogGraphicsCalls()) {
     ptrs_.${method} = [ptr, delegate](${signature}) -> ${return_type} {
       delegate->Log("${method}");
       uint64_t timestamp_start = 0;

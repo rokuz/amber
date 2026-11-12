@@ -2030,5 +2030,196 @@ PIPELINE raytracing my_pipeline
   }
 }
 
+TEST_F(AmberScriptParserTest, RayTracingTlasMotionAndApi) {
+  std::string in = R"(
+ACCELERATION_STRUCTURE BOTTOM_LEVEL blas
+  GEOMETRY TRIANGLES
+    0 0 0  0 1 0  1 0 0
+  END
+END
+ACCELERATION_STRUCTURE TOP_LEVEL plain
+  BOTTOM_LEVEL_INSTANCE blas
+  END
+END
+ACCELERATION_STRUCTURE TOP_LEVEL moving
+  MOTION
+  BOTTOM_LEVEL_INSTANCE blas
+  END
+END
+ACCELERATION_STRUCTURE TOP_LEVEL nv
+  API NV
+  BOTTOM_LEVEL_INSTANCE blas
+  END
+END
+ACCELERATION_STRUCTURE TOP_LEVEL khr
+  API KHR
+  BOTTOM_LEVEL_INSTANCE blas
+  END
+END
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+
+  auto script = parser.GetScript();
+  EXPECT_FALSE(script->GetTLAS("plain")->IsMotion());
+  EXPECT_FALSE(script->GetTLAS("plain")->IsNV());
+  EXPECT_TRUE(script->GetTLAS("moving")->IsMotion());
+  EXPECT_FALSE(script->GetTLAS("moving")->IsNV());
+  EXPECT_TRUE(script->GetTLAS("nv")->IsNV());
+  EXPECT_FALSE(script->GetTLAS("nv")->IsMotion());
+  EXPECT_FALSE(script->GetTLAS("khr")->IsNV());
+}
+
+TEST_F(AmberScriptParserTest, RayTracingTlasMotionAndApiErrors) {
+  {
+    std::string in = R"(
+ACCELERATION_STRUCTURE TOP_LEVEL tlas
+  MOTION now
+END
+)";
+    Parser parser;
+    Result r = parser.Parse(in);
+    ASSERT_FALSE(r.IsSuccess());
+    EXPECT_EQ("3: extra parameters after MOTION command: now", r.Error());
+  }
+  {
+    std::string in = R"(
+ACCELERATION_STRUCTURE TOP_LEVEL tlas
+  API DXR
+END
+)";
+    Parser parser;
+    Result r = parser.Parse(in);
+    ASSERT_FALSE(r.IsSuccess());
+    EXPECT_EQ("3: unknown ray tracing API: DXR", r.Error());
+  }
+  {
+    std::string in = R"(
+ACCELERATION_STRUCTURE TOP_LEVEL tlas
+  API
+END
+)";
+    Parser parser;
+    Result r = parser.Parse(in);
+    ASSERT_FALSE(r.IsSuccess());
+    EXPECT_EQ("4: API requires KHR or NV", r.Error());
+  }
+  {
+    std::string in = R"(
+ACCELERATION_STRUCTURE TOP_LEVEL tlas
+  API NV
+  MOTION
+END
+)";
+    Parser parser;
+    Result r = parser.Parse(in);
+    ASSERT_FALSE(r.IsSuccess());
+    EXPECT_EQ(
+        "5: a motion acceleration structure can not be built with the NV API",
+        r.Error());
+  }
+  {
+    std::string in = R"(
+BUFFER push DATA_TYPE uint32 DATA 1 2 3 4 END
+ACCELERATION_STRUCTURE TOP_LEVEL tlas
+  API NV
+END
+ACCELERATION_STRUCTURE ADDRESS tlas BUFFER push OFFSET 0
+)";
+    Parser parser;
+    Result r = parser.Parse(in);
+    ASSERT_FALSE(r.IsSuccess());
+    EXPECT_EQ(
+        "6: acceleration structures built with the NV API have no device "
+        "address: tlas",
+        r.Error());
+  }
+}
+
+TEST_F(AmberScriptParserTest, RayTracingPipelineApiAndMotionFlag) {
+  std::string in = R"(
+SHADER ray_generation raygen GLSL
+#version 460 core
+void main() {}
+END
+PIPELINE raytracing nv_pipeline
+  API NV
+  SHADER_GROUP group raygen
+END
+PIPELINE raytracing motion_pipeline
+  FLAGS ALLOW_MOTION
+  SHADER_GROUP group raygen
+END
+PIPELINE raytracing khr_pipeline
+  API KHR
+  SHADER_GROUP group raygen
+END
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+
+  auto script = parser.GetScript();
+  const auto& pipelines = script->GetPipelines();
+  ASSERT_EQ(3U, pipelines.size());
+  EXPECT_TRUE(pipelines[0]->IsRayTracingNV());
+  EXPECT_EQ(0U, pipelines[0]->GetCreateFlags());
+  EXPECT_FALSE(pipelines[1]->IsRayTracingNV());
+  EXPECT_EQ(0x00100000U, pipelines[1]->GetCreateFlags());
+  EXPECT_FALSE(pipelines[2]->IsRayTracingNV());
+}
+
+TEST_F(AmberScriptParserTest, RayTracingPipelineApiErrors) {
+  {
+    std::string in = R"(
+PIPELINE compute my_pipeline
+  API NV
+END
+)";
+    Parser parser;
+    Result r = parser.Parse(in);
+    ASSERT_FALSE(r.IsSuccess());
+    EXPECT_EQ("3: API is allowed only for ray tracing pipeline", r.Error());
+  }
+  {
+    std::string in = R"(
+SHADER ray_generation raygen GLSL
+#version 460 core
+void main() {}
+END
+PIPELINE raytracing my_pipeline
+  API NV
+  FLAGS ALLOW_MOTION
+  SHADER_GROUP group raygen
+END
+)";
+    Parser parser;
+    Result r = parser.Parse(in);
+    ASSERT_FALSE(r.IsSuccess());
+    EXPECT_EQ("10: NV ray tracing pipelines do not support motion", r.Error());
+  }
+  {
+    std::string in = R"(
+SHADER ray_generation raygen GLSL
+#version 460 core
+void main() {}
+END
+PIPELINE raytracing my_pipeline
+  API NV
+  FLAGS LIBRARY
+  SHADER_GROUP group raygen
+END
+)";
+    Parser parser;
+    Result r = parser.Parse(in);
+    ASSERT_FALSE(r.IsSuccess());
+    EXPECT_EQ("10: NV ray tracing pipelines do not support libraries",
+              r.Error());
+  }
+}
+
 }  // namespace amberscript
 }  // namespace amber

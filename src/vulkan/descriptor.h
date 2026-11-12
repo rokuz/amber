@@ -48,7 +48,8 @@ enum class DescriptorType : uint8_t {
   kUniformTexelBuffer,
   kStorageTexelBuffer,
   kSampler,
-  kTLAS
+  kTLAS,
+  kTLASNV
 };
 
 class Descriptor {

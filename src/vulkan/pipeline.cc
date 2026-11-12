@@ -551,13 +551,15 @@ Result Pipeline::AddTLASDescriptor(const TLASCommand* cmd) {
 
   auto& descriptors = descriptor_set_info_[cmd->GetDescriptorSet()].descriptors;
 
+  const DescriptorType type =
+      cmd->GetTLAS()->IsNV() ? DescriptorType::kTLASNV : DescriptorType::kTLAS;
   if (desc == nullptr) {
     auto tlas_desc = std::make_unique<TLASDescriptor>(
-        cmd->GetTLAS(), DescriptorType::kTLAS, device_, GetBlases(),
-        GetTlases(), cmd->GetDescriptorSet(), cmd->GetBinding());
+        cmd->GetTLAS(), type, device_, GetBlases(), GetTlases(),
+        cmd->GetDescriptorSet(), cmd->GetBinding());
     descriptors.push_back(std::move(tlas_desc));
   } else {
-    if (desc->GetDescriptorType() != DescriptorType::kTLAS) {
+    if (desc->GetDescriptorType() != type) {
       return Result(
           "Descriptors bound to the same binding needs to have matching "
           "descriptor types");
