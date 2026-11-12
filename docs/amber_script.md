@@ -166,6 +166,7 @@ with:
  * `ShaderRelaxedExtendedInstructionFeaturesKHR.shaderRelaxedExtendedInstruction`
  * `FragmentDensityMapFeaturesEXT.fragmentDensityMap`
  * `ShadingRateImageFeaturesNV.shadingRateImage`
+ * `FragmentShaderBarycentricFeaturesKHR.fragmentShaderBarycentric`
  * `ComputeShaderDerivativesPropertiesKHR.meshAndTaskShaderDerivatives` (a
    property: the device must report `meshAndTaskShaderDerivatives`; it enables
    nothing)

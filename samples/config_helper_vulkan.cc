@@ -648,6 +648,13 @@ const std::vector<FeatureStructInfo>& KnownFeatureStructs() {
        false,
        {AMBER_FEATURE_FIELD(VkPhysicalDeviceShadingRateImageFeaturesNV,
                             shadingRateImage)}},
+      {"FragmentShaderBarycentricFeaturesKHR",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_BARYCENTRIC_FEATURES_KHR,
+       VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceFragmentShaderBarycentricFeaturesKHR),
+       false,
+       {AMBER_FEATURE_FIELD(VkPhysicalDeviceFragmentShaderBarycentricFeaturesKHR,
+                            fragmentShaderBarycentric)}},
   };
   return kStructs;
 }

@@ -309,6 +309,9 @@ bool Script::IsKnownFeature(const std::string& name) const {
          name == "FragmentDensityMapFeaturesEXT.fragmentDensityMap" ||
          name == "ShadingRateImageFeaturesNV.shadingRateImage" ||
          name ==
+             "FragmentShaderBarycentricFeaturesKHR."
+             "fragmentShaderBarycentric" ||
+         name ==
              "ComputeShaderDerivativesPropertiesKHR."
              "meshAndTaskShaderDerivatives" ||
          name == "SubgroupSupportedOperations.partitionedNV" ||
