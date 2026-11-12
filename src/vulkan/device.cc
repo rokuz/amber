@@ -130,6 +130,9 @@ const char kMeshShaderEXTPrefix[] = "MeshShaderFeaturesEXT.";
 const char kMeshAndTaskShaderDerivatives[] =
     "ComputeShaderDerivativesPropertiesKHR.meshAndTaskShaderDerivatives";
 const char kMeshShaderNVPrefix[] = "MeshShaderFeaturesNV.";
+const char kFullyCoveredFragmentShaderInputVariable[] =
+    "ConservativeRasterizationPropertiesEXT."
+    "fullyCoveredFragmentShaderInputVariable";
 
 struct BaseOutStructure {
   VkStructureType sType;
@@ -1050,6 +1053,22 @@ Result Device::Initialize(
       return Result(
           "Missing compute shader derivatives in mesh and task shaders "
           "(meshAndTaskShaderDerivatives)");
+    }
+  }
+  if (std::find(required_features.begin(), required_features.end(),
+                kFullyCoveredFragmentShaderInputVariable) !=
+      required_features.end()) {
+    VkPhysicalDeviceConservativeRasterizationPropertiesEXT conservative = {};
+    conservative.sType =
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONSERVATIVE_RASTERIZATION_PROPERTIES_EXT;
+    VkPhysicalDeviceProperties2KHR properties2 = {};
+    properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    properties2.pNext = &conservative;
+    ptrs_.vkGetPhysicalDeviceProperties2(physical_device_, &properties2);
+    if (conservative.fullyCoveredFragmentShaderInputVariable != VK_TRUE) {
+      return Result(
+          "Missing the FullyCoveredEXT fragment shader input "
+          "(fullyCoveredFragmentShaderInputVariable)");
     }
   }
   ray_tracing_position_fetch_ =

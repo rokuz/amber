@@ -312,8 +312,44 @@ bool Script::IsKnownFeature(const std::string& name) const {
              "FragmentShaderBarycentricFeaturesKHR."
              "fragmentShaderBarycentric" ||
          name ==
+             "CooperativeMatrixDecodeVectorFeaturesNV."
+             "cooperativeMatrixDecodeVector" ||
+         name ==
+             "CooperativeMatrixMaintenance1FeaturesEXT."
+             "cooperativeMatrixProperties2" ||
+         name ==
+             "CooperativeMatrixMaintenance1FeaturesEXT."
+             "cooperativeMatrixReductions" ||
+         name ==
+             "CooperativeMatrixMaintenance1FeaturesEXT."
+             "cooperativeMatrixConversions" ||
+         name ==
+             "CooperativeMatrixMaintenance1FeaturesEXT."
+             "cooperativeMatrixPerElementOperations" ||
+         name ==
+             "CooperativeMatrixMaintenance1FeaturesEXT."
+             "cooperativeMatrixGetCoordinate" ||
+         name ==
+             "Shader64BitIndexingFeaturesEXT."
+             "shader64BitIndexing" ||
+         name ==
+             "ShaderIntegerDotProductFeatures."
+             "shaderIntegerDotProduct" ||
+         name ==
+             "ShaderMaximalReconvergenceFeaturesKHR."
+             "shaderMaximalReconvergence" ||
+         name ==
+             "ShaderSubgroupUniformControlFlowFeaturesKHR."
+             "shaderSubgroupUniformControlFlow" ||
+         name ==
+             "ShaderEarlyAndLateFragmentTestsFeaturesAMD."
+             "shaderEarlyAndLateFragmentTests" ||
+         name ==
              "ComputeShaderDerivativesPropertiesKHR."
              "meshAndTaskShaderDerivatives" ||
+         name ==
+             "ConservativeRasterizationPropertiesEXT."
+             "fullyCoveredFragmentShaderInputVariable" ||
          name == "SubgroupSupportedOperations.partitionedNV" ||
          name == "ShaderLongVectorFeaturesEXT.longVector" ||
          name == "CooperativeMatrixFeaturesNV.cooperativeMatrix" ||

@@ -167,9 +167,23 @@ with:
  * `FragmentDensityMapFeaturesEXT.fragmentDensityMap`
  * `ShadingRateImageFeaturesNV.shadingRateImage`
  * `FragmentShaderBarycentricFeaturesKHR.fragmentShaderBarycentric`
+ * `CooperativeMatrixDecodeVectorFeaturesNV.cooperativeMatrixDecodeVector`
+ * `CooperativeMatrixMaintenance1FeaturesEXT.cooperativeMatrixProperties2`
+ * `CooperativeMatrixMaintenance1FeaturesEXT.cooperativeMatrixReductions`
+ * `CooperativeMatrixMaintenance1FeaturesEXT.cooperativeMatrixConversions`
+ * `CooperativeMatrixMaintenance1FeaturesEXT.cooperativeMatrixPerElementOperations`
+ * `CooperativeMatrixMaintenance1FeaturesEXT.cooperativeMatrixGetCoordinate`
+ * `Shader64BitIndexingFeaturesEXT.shader64BitIndexing`
+ * `ShaderIntegerDotProductFeatures.shaderIntegerDotProduct`
+ * `ShaderMaximalReconvergenceFeaturesKHR.shaderMaximalReconvergence`
+ * `ShaderSubgroupUniformControlFlowFeaturesKHR.shaderSubgroupUniformControlFlow`
+ * `ShaderEarlyAndLateFragmentTestsFeaturesAMD.shaderEarlyAndLateFragmentTests`
  * `ComputeShaderDerivativesPropertiesKHR.meshAndTaskShaderDerivatives` (a
    property: the device must report `meshAndTaskShaderDerivatives`; it enables
    nothing)
+ * `ConservativeRasterizationPropertiesEXT.fullyCoveredFragmentShaderInputVariable`
+   (a property: the device must report `fullyCoveredFragmentShaderInputVariable`;
+   it enables nothing)
  * `TensorFeaturesARM.tensors`
  * `TensorFeaturesARM.shaderTensorAccess`
  * `TensorFeaturesARM.tensorNonPacked`
