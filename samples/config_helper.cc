@@ -45,6 +45,7 @@ amber::Result ConfigHelper::CreateConfig(
     const std::vector<std::string>& required_device_extensions,
     bool disable_validation_layer,
     bool enable_pipeline_runtime_layer,
+    const std::string& layer_library,
     bool show_version_info,
     std::unique_ptr<amber::EngineConfig>* config) {
   switch (engine) {
@@ -72,7 +73,7 @@ amber::Result ConfigHelper::CreateConfig(
       engine_major, engine_minor, selected_device, selected_device_name,
       required_features, required_instance_extensions,
       required_device_extensions, disable_validation_layer,
-      enable_pipeline_runtime_layer, show_version_info, config);
+      enable_pipeline_runtime_layer, layer_library, show_version_info, config);
 }
 
 }  // namespace sample

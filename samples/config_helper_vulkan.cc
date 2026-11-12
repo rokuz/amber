@@ -14,7 +14,20 @@
 
 #include "samples/config_helper_vulkan.h"
 
+#include <vulkan/vk_layer.h>
 #include <vulkan/vulkan.h>
+
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
 
 #include <algorithm>
 #include <cstddef>
@@ -46,6 +59,166 @@ const size_t kNumberOfRequiredValidationLayers =
     sizeof(kRequiredValidationLayers) / sizeof(const char*);
 
 const char kPipelineRuntimeLayerName[] = "VK_LAYER_STADIA_pipeline_runtime";
+
+// A Vulkan layer loaded from a library and inserted between Amber and the
+// Vulkan loader, the way the loader inserts layers found through manifests.
+// This needs no manifest, environment variable or registry entry, so it also
+// works where the loader ignores them (for example in elevated processes on
+// Windows).
+struct LayerChain {
+  PFN_vkGetInstanceProcAddr get_instance_proc_addr = nullptr;
+  PFN_vkGetDeviceProcAddr get_device_proc_addr = nullptr;
+  VkInstance instance = VK_NULL_HANDLE;
+  VkDevice device = VK_NULL_HANDLE;
+};
+
+LayerChain& Chain() {
+  static LayerChain chain;
+  return chain;
+}
+
+PFN_vkVoidFunction VKAPI_CALL ChainGetInstanceProcAddr(VkInstance instance,
+                                                       const char* name) {
+  const LayerChain& chain = Chain();
+  if (!chain.get_instance_proc_addr) {
+    return vkGetInstanceProcAddr(instance, name);
+  }
+  if (chain.device != VK_NULL_HANDLE && instance != VK_NULL_HANDLE) {
+    if (auto function = chain.get_device_proc_addr(chain.device, name)) {
+      return function;
+    }
+  }
+  return chain.get_instance_proc_addr(instance, name);
+}
+
+#define AMBER_VK(name)          \
+  reinterpret_cast<PFN_##name>( \
+      ChainGetInstanceProcAddr(Chain().instance, #name))
+
+struct UnlinkedStruct {
+  VkBaseOutStructure* previous;
+  VkBaseOutStructure* removed;
+};
+
+// Removes the structures of |type| from the chain starting at |head| and
+// returns them so that RelinkStructs can put them back.
+std::vector<UnlinkedStruct> UnlinkStructs(const void** head,
+                                          VkStructureType type) {
+  std::vector<UnlinkedStruct> unlinked;
+  VkBaseOutStructure* previous = nullptr;
+  auto* node = static_cast<VkBaseOutStructure*>(const_cast<void*>(*head));
+  while (node) {
+    VkBaseOutStructure* next = node->pNext;
+    if (node->sType == type) {
+      unlinked.push_back({previous, node});
+      if (previous) {
+        previous->pNext = next;
+      } else {
+        *head = next;
+      }
+    } else {
+      previous = node;
+    }
+    node = next;
+  }
+  return unlinked;
+}
+
+void RelinkStructs(const void** head,
+                   const std::vector<UnlinkedStruct>& unlinked) {
+  for (auto it = unlinked.rbegin(); it != unlinked.rend(); ++it) {
+    if (it->previous) {
+      it->previous->pNext = it->removed;
+    } else {
+      *head = it->removed;
+    }
+  }
+}
+
+// The next element of the chain after the layer: the Vulkan loader, without
+// the layer link structures Amber passed to the layer.
+VKAPI_ATTR VkResult VKAPI_CALL
+LoaderCreateInstance(const VkInstanceCreateInfo* info,
+                     const VkAllocationCallbacks* allocator,
+                     VkInstance* instance) {
+  VkInstanceCreateInfo copy = *info;
+  auto unlinked =
+      UnlinkStructs(&copy.pNext, VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO);
+  VkResult result = vkCreateInstance(&copy, allocator, instance);
+  RelinkStructs(&copy.pNext, unlinked);
+  return result;
+}
+
+VKAPI_ATTR VkResult VKAPI_CALL
+LoaderCreateDevice(VkPhysicalDevice physical_device,
+                   const VkDeviceCreateInfo* info,
+                   const VkAllocationCallbacks* allocator,
+                   VkDevice* device) {
+  VkDeviceCreateInfo copy = *info;
+  auto unlinked =
+      UnlinkStructs(&copy.pNext, VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO);
+  VkResult result = vkCreateDevice(physical_device, &copy, allocator, device);
+  RelinkStructs(&copy.pNext, unlinked);
+  return result;
+}
+
+VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
+LoaderGetInstanceProcAddr(VkInstance instance, const char* name) {
+  if (std::strcmp(name, "vkCreateInstance") == 0) {
+    return reinterpret_cast<PFN_vkVoidFunction>(LoaderCreateInstance);
+  }
+  if (std::strcmp(name, "vkCreateDevice") == 0) {
+    return reinterpret_cast<PFN_vkVoidFunction>(LoaderCreateDevice);
+  }
+  return vkGetInstanceProcAddr(instance, name);
+}
+
+amber::Result LoadLayerLibrary(const std::string& path) {
+#if defined(_WIN32)
+  HMODULE module = LoadLibraryA(path.c_str());
+  if (!module) {
+    return amber::Result("Unable to load the layer library " + path +
+                         " (error " + std::to_string(GetLastError()) + ")");
+  }
+  auto symbol = [module](const char* name) {
+    return reinterpret_cast<void*>(GetProcAddress(module, name));
+  };
+#else
+  void* module = dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
+  if (!module) {
+    const char* error = dlerror();
+    return amber::Result("Unable to load the layer library " + path + ": " +
+                         (error ? error : "unknown error"));
+  }
+  auto symbol = [module](const char* name) { return dlsym(module, name); };
+#endif
+  LayerChain& chain = Chain();
+  auto negotiate = reinterpret_cast<PFN_vkNegotiateLoaderLayerInterfaceVersion>(
+      symbol("vkNegotiateLoaderLayerInterfaceVersion"));
+  if (negotiate) {
+    VkNegotiateLayerInterface interface_info = {};
+    interface_info.sType = LAYER_NEGOTIATE_INTERFACE_STRUCT;
+    interface_info.loaderLayerInterfaceVersion = 2;
+    if (negotiate(&interface_info) == VK_SUCCESS) {
+      chain.get_instance_proc_addr = interface_info.pfnGetInstanceProcAddr;
+      chain.get_device_proc_addr = interface_info.pfnGetDeviceProcAddr;
+    }
+  }
+  if (!chain.get_instance_proc_addr) {
+    chain.get_instance_proc_addr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(
+        symbol("vkGetInstanceProcAddr"));
+  }
+  if (!chain.get_device_proc_addr) {
+    chain.get_device_proc_addr = reinterpret_cast<PFN_vkGetDeviceProcAddr>(
+        symbol("vkGetDeviceProcAddr"));
+  }
+  if (!chain.get_instance_proc_addr || !chain.get_device_proc_addr) {
+    chain = LayerChain();
+    return amber::Result("The library " + path +
+                         " does not export the entry points of a Vulkan layer");
+  }
+  return {};
+}
 
 const char kVariablePointers[] = "VariablePointerFeatures.variablePointers";
 const char kVariablePointersStorageBuffer[] =
@@ -169,6 +342,21 @@ const std::vector<FeatureStructInfo>& KnownFeatureStructs() {
                             shaderFloat8),
         AMBER_FEATURE_FIELD(VkPhysicalDeviceShaderFloat8FeaturesEXT,
                             shaderFloat8CooperativeMatrix)}},
+      {"TensorFeaturesARM",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TENSOR_FEATURES_ARM,
+       VK_ARM_TENSORS_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceTensorFeaturesARM),
+       false,
+       {AMBER_FEATURE_FIELD(VkPhysicalDeviceTensorFeaturesARM, tensors),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceTensorFeaturesARM,
+                            shaderTensorAccess),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceTensorFeaturesARM, tensorNonPacked),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceTensorFeaturesARM,
+                            shaderStorageTensorArrayDynamicIndexing),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceTensorFeaturesARM,
+                            shaderStorageTensorArrayNonUniformIndexing),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceTensorFeaturesARM,
+                            descriptorBindingStorageTensorUpdateAfterBind)}},
       {"RayQueryFeaturesKHR",
        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR,
        VK_KHR_RAY_QUERY_EXTENSION_NAME,
@@ -1097,9 +1285,9 @@ std::vector<std::string> GetAvailableDeviceExtensions(
   uint32_t available_extension_count = 0;
   std::vector<VkExtensionProperties> available_extension_properties;
 
-  if (vkEnumerateDeviceExtensionProperties(physical_device, nullptr,
-                                           &available_extension_count,
-                                           nullptr) != VK_SUCCESS) {
+  if (AMBER_VK(vkEnumerateDeviceExtensionProperties)(physical_device, nullptr,
+                                                     &available_extension_count,
+                                                     nullptr) != VK_SUCCESS) {
     return available_extensions;
   }
 
@@ -1108,7 +1296,7 @@ std::vector<std::string> GetAvailableDeviceExtensions(
   }
 
   available_extension_properties.resize(available_extension_count);
-  if (vkEnumerateDeviceExtensionProperties(
+  if (AMBER_VK(vkEnumerateDeviceExtensionProperties)(
           physical_device, nullptr, &available_extension_count,
           available_extension_properties.data()) != VK_SUCCESS) {
     return available_extensions;
@@ -1145,10 +1333,11 @@ uint32_t ChooseQueueFamilyIndex(const VkPhysicalDevice& physical_device) {
   uint32_t count = 0;
   std::vector<VkQueueFamilyProperties> properties;
 
-  vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count, nullptr);
+  AMBER_VK(vkGetPhysicalDeviceQueueFamilyProperties)(physical_device, &count,
+                                                     nullptr);
   properties.resize(count);
-  vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count,
-                                           properties.data());
+  AMBER_VK(vkGetPhysicalDeviceQueueFamilyProperties)(physical_device, &count,
+                                                     properties.data());
 
   for (uint32_t i = 0; i < count; ++i) {
     if (properties[i].queueFlags &
@@ -1213,21 +1402,23 @@ ConfigHelperVulkan::ConfigHelperVulkan() = default;
 
 ConfigHelperVulkan::~ConfigHelperVulkan() {
   if (vk_.device) {
-    vkDestroyDevice(vk_.device, nullptr);
+    AMBER_VK(vkDestroyDevice)(vk_.device, nullptr);
+    Chain().device = VK_NULL_HANDLE;
   }
 
   if (vk_.debug_cb) {
     auto vkDestroyDebugReportCallbackEXT =
         reinterpret_cast<PFN_vkDestroyDebugReportCallbackEXT>(
-            vkGetInstanceProcAddr(vk_.instance,
-                                  "vkDestroyDebugReportCallbackEXT"));
+            ChainGetInstanceProcAddr(vk_.instance,
+                                     "vkDestroyDebugReportCallbackEXT"));
     if (vkDestroyDebugReportCallbackEXT) {
       vkDestroyDebugReportCallbackEXT(vk_.instance, vk_.debug_cb, nullptr);
     }
   }
 
   if (vk_.instance) {
-    vkDestroyInstance(vk_.instance, nullptr);
+    AMBER_VK(vkDestroyInstance)(vk_.instance, nullptr);
+    Chain().instance = VK_NULL_HANDLE;
   }
 }
 
@@ -1305,8 +1496,26 @@ amber::Result ConfigHelperVulkan::CreateVulkanInstance(
       static_cast<uint32_t>(required_extensions_in_char.size());
   instance_info.ppEnabledExtensionNames = required_extensions_in_char.data();
 
-  const VkResult result =
-      vkCreateInstance(&instance_info, nullptr, &vk_.instance);
+  VkResult result = VK_ERROR_INITIALIZATION_FAILED;
+  if (Chain().get_instance_proc_addr) {
+    VkLayerInstanceLink link = {};
+    link.pfnNextGetInstanceProcAddr = LoaderGetInstanceProcAddr;
+    VkLayerInstanceCreateInfo layer_info = {};
+    layer_info.sType = VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO;
+    layer_info.pNext = instance_info.pNext;
+    layer_info.function = VK_LAYER_LINK_INFO;
+    layer_info.u.pLayerInfo = &link;
+    instance_info.pNext = &layer_info;
+    auto create_instance = reinterpret_cast<PFN_vkCreateInstance>(
+        Chain().get_instance_proc_addr(VK_NULL_HANDLE, "vkCreateInstance"));
+    if (create_instance) {
+      result = create_instance(&instance_info, nullptr, &vk_.instance);
+    }
+    instance_info.pNext = layer_info.pNext;
+  } else {
+    result = vkCreateInstance(&instance_info, nullptr, &vk_.instance);
+  }
+  Chain().instance = vk_.instance;
   if (result != VK_SUCCESS) {
     std::stringstream error_message;
     error_message << "Unable to create vulkan instance: " << to_str(result);
@@ -1324,8 +1533,8 @@ amber::Result ConfigHelperVulkan::CreateDebugReportCallback() {
 
   auto vkCreateDebugReportCallbackEXT =
       reinterpret_cast<PFN_vkCreateDebugReportCallbackEXT>(
-          vkGetInstanceProcAddr(vk_.instance,
-                                "vkCreateDebugReportCallbackEXT"));
+          ChainGetInstanceProcAddr(vk_.instance,
+                                   "vkCreateDebugReportCallbackEXT"));
   if (!vkCreateDebugReportCallbackEXT) {
     return amber::Result("Sample: vkCreateDebugReportCallbackEXT is nullptr");
   }
@@ -1521,8 +1730,8 @@ amber::Result ConfigHelperVulkan::CheckVulkanPhysicalDeviceRequirements(
 
     auto vkGetPhysicalDeviceFeatures2KHR =
         reinterpret_cast<PFN_vkGetPhysicalDeviceFeatures2KHR>(
-            vkGetInstanceProcAddr(vk_.instance,
-                                  "vkGetPhysicalDeviceFeatures2KHR"));
+            ChainGetInstanceProcAddr(vk_.instance,
+                                     "vkGetPhysicalDeviceFeatures2KHR"));
     vkGetPhysicalDeviceFeatures2KHR(physical_device, &features2);
     features_.device = features2.features;
 
@@ -1647,7 +1856,7 @@ amber::Result ConfigHelperVulkan::CheckVulkanPhysicalDeviceRequirements(
       return r;
     }
 
-    vkGetPhysicalDeviceFeatures(physical_device, &features_.device);
+    AMBER_VK(vkGetPhysicalDeviceFeatures)(physical_device, &features_.device);
   }
   if (!AreAllRequiredFeaturesSupported(features_.device,
                                        required_vulkan_features)) {
@@ -1670,13 +1879,14 @@ amber::Result ConfigHelperVulkan::ChooseVulkanPhysicalDevice(
   uint32_t count = 0;
   std::vector<VkPhysicalDevice> physical_devices;
 
-  if (vkEnumeratePhysicalDevices(vk_.instance, &count, nullptr) != VK_SUCCESS) {
+  if (AMBER_VK(vkEnumeratePhysicalDevices)(vk_.instance, &count, nullptr) !=
+      VK_SUCCESS) {
     return amber::Result("Unable to enumerate physical devices");
   }
 
   physical_devices.resize(count);
-  if (vkEnumeratePhysicalDevices(vk_.instance, &count,
-                                 physical_devices.data()) != VK_SUCCESS) {
+  if (AMBER_VK(vkEnumeratePhysicalDevices)(
+          vk_.instance, &count, physical_devices.data()) != VK_SUCCESS) {
     return amber::Result("Unable to enumerate physical devices");
   }
 
@@ -1687,7 +1897,7 @@ amber::Result ConfigHelperVulkan::ChooseVulkanPhysicalDevice(
     amber::Result first_failure;
     for (uint32_t i = 0; i < count; ++i) {
       VkPhysicalDeviceProperties properties = {};
-      vkGetPhysicalDeviceProperties(physical_devices[i], &properties);
+      AMBER_VK(vkGetPhysicalDeviceProperties)(physical_devices[i], &properties);
       const std::string name = properties.deviceName;
       names.push_back(name);
       if (ToLowerAscii(name).find(wanted) == std::string::npos) {
@@ -2044,7 +2254,29 @@ amber::Result ConfigHelperVulkan::CreateDeviceWithFeatures2(
 }
 
 amber::Result ConfigHelperVulkan::DoCreateDevice(VkDeviceCreateInfo* info) {
-  auto result = vkCreateDevice(vk_.physical_device, info, nullptr, &vk_.device);
+  VkResult result = VK_ERROR_INITIALIZATION_FAILED;
+  if (Chain().get_instance_proc_addr) {
+    VkLayerDeviceLink link = {};
+    link.pfnNextGetInstanceProcAddr = LoaderGetInstanceProcAddr;
+    link.pfnNextGetDeviceProcAddr = vkGetDeviceProcAddr;
+    VkLayerDeviceCreateInfo layer_info = {};
+    layer_info.sType = VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO;
+    layer_info.pNext = info->pNext;
+    layer_info.function = VK_LAYER_LINK_INFO;
+    layer_info.u.pLayerInfo = &link;
+    info->pNext = &layer_info;
+    auto create_device = reinterpret_cast<PFN_vkCreateDevice>(
+        Chain().get_instance_proc_addr(vk_.instance, "vkCreateDevice"));
+    if (create_device) {
+      result = create_device(vk_.physical_device, info, nullptr, &vk_.device);
+    }
+    info->pNext = layer_info.pNext;
+  } else {
+    result = vkCreateDevice(vk_.physical_device, info, nullptr, &vk_.device);
+  }
+  if (result == VK_SUCCESS) {
+    Chain().device = vk_.device;
+  }
   if (result != VK_SUCCESS) {
     return amber::Result("Unable to create vulkan device: " + to_str(result));
   }
@@ -2099,8 +2331,8 @@ void ConfigHelperVulkan::DumpPhysicalDeviceInfo() {
 
     vkGetPhysicalDeviceProperties2KHR =
         reinterpret_cast<PFN_vkGetPhysicalDeviceProperties2KHR>(
-            vkGetInstanceProcAddr(vk_.instance,
-                                  "vkGetPhysicalDeviceProperties2KHR"));
+            ChainGetInstanceProcAddr(vk_.instance,
+                                     "vkGetPhysicalDeviceProperties2KHR"));
     if (!vkGetPhysicalDeviceProperties2KHR) {
       std::cout << "Warning: device claimed to support "
                    "vkGetPhysicalDeviceProperties2KHR but could not find this "
@@ -2115,7 +2347,8 @@ void ConfigHelperVulkan::DumpPhysicalDeviceInfo() {
   if (vkGetPhysicalDeviceProperties2KHR) {
     vkGetPhysicalDeviceProperties2KHR(vk_.physical_device, &properties2);
   } else {
-    vkGetPhysicalDeviceProperties(vk_.physical_device, &properties2.properties);
+    AMBER_VK(vkGetPhysicalDeviceProperties)(vk_.physical_device,
+                                            &properties2.properties);
   }
 
   const VkPhysicalDeviceProperties& props = properties2.properties;
@@ -2155,7 +2388,7 @@ void ConfigHelperVulkan::DumpPhysicalDeviceInfo() {
   if (supports_.cooperative_matrix) {
     auto get_cooperative_matrix_properties =
         reinterpret_cast<PFN_vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR>(
-            vkGetInstanceProcAddr(
+            ChainGetInstanceProcAddr(
                 vk_.instance,
                 "vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR"));
     if (get_cooperative_matrix_properties) {
@@ -2183,11 +2416,11 @@ void ConfigHelperVulkan::DumpPhysicalDeviceInfo() {
                      name) != vk_.available_device_extensions.end();
   };
   auto get_properties2 = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties2>(
-      vkGetInstanceProcAddr(vk_.instance, "vkGetPhysicalDeviceProperties2"));
+      ChainGetInstanceProcAddr(vk_.instance, "vkGetPhysicalDeviceProperties2"));
   if (has_extension(VK_NV_COOPERATIVE_MATRIX_EXTENSION_NAME)) {
     auto get_properties =
         reinterpret_cast<PFN_vkGetPhysicalDeviceCooperativeMatrixPropertiesNV>(
-            vkGetInstanceProcAddr(
+            ChainGetInstanceProcAddr(
                 vk_.instance,
                 "vkGetPhysicalDeviceCooperativeMatrixPropertiesNV"));
     if (get_properties) {
@@ -2229,9 +2462,9 @@ void ConfigHelperVulkan::DumpPhysicalDeviceInfo() {
     }
     auto get_flexible = reinterpret_cast<
         PFN_vkGetPhysicalDeviceCooperativeMatrixFlexibleDimensionsPropertiesNV>(
-        vkGetInstanceProcAddr(vk_.instance,
-                              "vkGetPhysicalDeviceCooperativeMatrixFlexible"
-                              "DimensionsPropertiesNV"));
+        ChainGetInstanceProcAddr(vk_.instance,
+                                 "vkGetPhysicalDeviceCooperativeMatrixFlexible"
+                                 "DimensionsPropertiesNV"));
     if (get_flexible) {
       uint32_t count = 0;
       get_flexible(vk_.physical_device, &count, nullptr);
@@ -2276,7 +2509,7 @@ void ConfigHelperVulkan::DumpPhysicalDeviceInfo() {
     }
     auto get_vectors =
         reinterpret_cast<PFN_vkGetPhysicalDeviceCooperativeVectorPropertiesNV>(
-            vkGetInstanceProcAddr(
+            ChainGetInstanceProcAddr(
                 vk_.instance,
                 "vkGetPhysicalDeviceCooperativeVectorPropertiesNV"));
     if (get_vectors) {
@@ -2298,6 +2531,22 @@ void ConfigHelperVulkan::DumpPhysicalDeviceInfo() {
       }
     }
   }
+  if (has_extension(VK_ARM_TENSORS_EXTENSION_NAME) && get_properties2) {
+    VkPhysicalDeviceTensorPropertiesARM tensor{};
+    tensor.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TENSOR_PROPERTIES_ARM;
+    VkPhysicalDeviceProperties2 properties2{};
+    properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    properties2.pNext = &tensor;
+    get_properties2(vk_.physical_device, &properties2);
+    std::cout << "  maxTensorDimensionCount: " << tensor.maxTensorDimensionCount
+              << std::endl;
+    std::cout << "  maxTensorElements: " << tensor.maxTensorElements
+              << std::endl;
+    std::cout << "  maxTensorShaderAccessArrayLength: "
+              << tensor.maxTensorShaderAccessArrayLength << std::endl;
+    std::cout << "  shaderTensorSupportedStages: "
+              << tensor.shaderTensorSupportedStages << std::endl;
+  }
   std::cout << "End of physical device properties." << std::endl;
 }
 
@@ -2311,8 +2560,15 @@ amber::Result ConfigHelperVulkan::CreateConfig(
     const std::vector<std::string>& required_device_extensions,
     bool disable_validation_layer,
     bool enable_pipeline_runtime_layer,
+    const std::string& layer_library,
     bool show_version_info,
     std::unique_ptr<amber::EngineConfig>* cfg_holder) {
+  if (!layer_library.empty()) {
+    amber::Result loaded = LoadLayerLibrary(layer_library);
+    if (!loaded.IsSuccess()) {
+      return loaded;
+    }
+  }
   amber::Result r = CreateVulkanInstance(
       engine_major, engine_minor, required_instance_extensions,
       disable_validation_layer, enable_pipeline_runtime_layer);
@@ -2342,7 +2598,7 @@ amber::Result ConfigHelperVulkan::CreateConfig(
     return r;
   }
 
-  vkGetDeviceQueue(vk_.device, vk_.queue_family_index, 0, &vk_.queue);
+  AMBER_VK(vkGetDeviceQueue)(vk_.device, vk_.queue_family_index, 0, &vk_.queue);
 
   *cfg_holder =
       std::unique_ptr<amber::EngineConfig>(new amber::VulkanEngineConfig());
@@ -2357,7 +2613,9 @@ amber::Result ConfigHelperVulkan::CreateConfig(
   config->queue_family_index = vk_.queue_family_index;
   config->queue = vk_.queue;
   config->device = vk_.device;
-  config->vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+  config->vkGetInstanceProcAddr = Chain().get_instance_proc_addr
+                                      ? ChainGetInstanceProcAddr
+                                      : vkGetInstanceProcAddr;
 
   return {};
 }

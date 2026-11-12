@@ -315,6 +315,8 @@ Result EngineVulkan::CreatePipeline(amber::Pipeline* pipeline) {
       type = BufferCommand::BufferType::kUniformDynamic;
     } else if (buf_info.type == BufferType::kStorageDynamic) {
       type = BufferCommand::BufferType::kSSBODynamic;
+    } else if (buf_info.type == BufferType::kTensor) {
+      type = BufferCommand::BufferType::kTensor;
     } else if (buf_info.type != BufferType::kStorage) {
       return Result("Vulkan: CreatePipeline - unknown buffer type: " +
                     std::to_string(static_cast<uint32_t>(buf_info.type)));

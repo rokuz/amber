@@ -530,7 +530,8 @@ class BufferCommand : public BindableResourceCommand {
     kSampledImage,
     kCombinedImageSampler,
     kUniformTexelBuffer,
-    kStorageTexelBuffer
+    kStorageTexelBuffer,
+    kTensor
   };
 
   BufferCommand(BufferType type, Pipeline* pipeline);
@@ -559,6 +560,7 @@ class BufferCommand : public BindableResourceCommand {
   bool IsStorageTexelBuffer() const {
     return buffer_type_ == BufferType::kStorageTexelBuffer;
   }
+  bool IsTensor() const { return buffer_type_ == BufferType::kTensor; }
   bool IsPushConstant() const {
     return buffer_type_ == BufferType::kPushConstant;
   }

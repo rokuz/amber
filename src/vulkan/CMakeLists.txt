@@ -37,9 +37,11 @@ set(VULKAN_ENGINE_SOURCES
     sampler_descriptor.cc
     sbt.cc
     tlas.cc
+    tensor_descriptor.cc
     tlas_descriptor.cc
     transfer_buffer.cc
     transfer_image.cc
+    transfer_tensor.cc
     vertex_buffer.cc
     ${CMAKE_BINARY_DIR}/src/vk-wrappers.inc.fake
 )

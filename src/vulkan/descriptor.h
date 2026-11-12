@@ -50,7 +50,8 @@ enum class DescriptorType : uint8_t {
   kSampler,
   kTLAS,
   kTLASNV,
-  kInputAttachment
+  kInputAttachment,
+  kTensor
 };
 
 class Descriptor {

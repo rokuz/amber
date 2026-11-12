@@ -75,9 +75,11 @@ LOCAL_SRC_FILES:= \
     src/vulkan/sampler_descriptor.cc \
     src/vulkan/sbt.cc \
     src/vulkan/tlas.cc \
+    src/vulkan/tensor_descriptor.cc \
     src/vulkan/tlas_descriptor.cc \
     src/vulkan/transfer_buffer.cc \
     src/vulkan/transfer_image.cc \
+    src/vulkan/transfer_tensor.cc \
     src/vulkan/vertex_buffer.cc \
     src/vulkan_engine_config.cc
 LOCAL_STATIC_LIBRARIES:=glslang SPIRV-Tools shaderc

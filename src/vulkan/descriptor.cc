@@ -61,6 +61,8 @@ VkDescriptorType Descriptor::GetVkDescriptorType() const {
       return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV;
     case DescriptorType::kInputAttachment:
       return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+    case DescriptorType::kTensor:
+      return VK_DESCRIPTOR_TYPE_TENSOR_ARM;
     default:
       assert(type_ == DescriptorType::kSampledImage);
       return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;

@@ -69,7 +69,20 @@ enum class BufferType : int8_t {
   /// A transform feedback buffer.
   kTransformFeedback,
   /// An input attachment.
-  kInputAttachment
+  kInputAttachment,
+  /// A tensor (VK_ARM_tensors).
+  kTensor
+};
+
+/// How the elements of a tensor are encoded when the data type alone does not
+/// say it: booleans and the bfloat16 and 8-bit float formats of
+/// VK_ARM_tensors are stored with an integer data type of the same width.
+enum class TensorEncoding : int8_t {
+  kNone = 0,
+  kBool,
+  kBFloat16,
+  kFloat8E4M3,
+  kFloat8E5M2,
 };
 
 enum class InputRate : int8_t {
@@ -248,6 +261,27 @@ class Buffer {
     return acceleration_structure_addresses_;
   }
 
+  /// Returns true if the buffer was declared as a tensor.
+  bool IsTensor() const { return !tensor_dims_.empty(); }
+  /// Sets the dimensions of a tensor, outermost first.
+  void SetTensorDims(const std::vector<uint64_t>& dims) { tensor_dims_ = dims; }
+  /// Returns the dimensions of a tensor, outermost first.
+  const std::vector<uint64_t>& GetTensorDims() const { return tensor_dims_; }
+  /// Sets the strides of a tensor in bytes. Empty means packed.
+  void SetTensorStrides(const std::vector<uint64_t>& strides) {
+    tensor_strides_ = strides;
+  }
+  /// Returns the strides of a tensor in bytes. Empty means packed.
+  const std::vector<uint64_t>& GetTensorStrides() const {
+    return tensor_strides_;
+  }
+  /// Sets how the tensor elements are encoded.
+  void SetTensorEncoding(TensorEncoding encoding) {
+    tensor_encoding_ = encoding;
+  }
+  /// Returns how the tensor elements are encoded.
+  TensorEncoding GetTensorEncoding() const { return tensor_encoding_; }
+
   /// Returns a pointer to the internal storage of the buffer.
   std::vector<uint8_t>* ValuePtr() { return &bytes_; }
   /// Returns a pointer to the internal storage of the buffer.
@@ -307,6 +341,9 @@ class Buffer {
   Sampler* sampler_ = nullptr;
   ImageDimension image_dim_ = ImageDimension::kUnknown;
   std::vector<AccelerationStructureAddress> acceleration_structure_addresses_;
+  std::vector<uint64_t> tensor_dims_;
+  std::vector<uint64_t> tensor_strides_;
+  TensorEncoding tensor_encoding_ = TensorEncoding::kNone;
 };
 
 }  // namespace amber

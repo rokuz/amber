@@ -30,8 +30,10 @@
 #include "src/vulkan/image_descriptor.h"
 #include "src/vulkan/raytracing_pipeline.h"
 #include "src/vulkan/sampler_descriptor.h"
+#include "src/vulkan/tensor_descriptor.h"
 #include "src/vulkan/tlas.h"
 #include "src/vulkan/tlas_descriptor.h"
+#include "src/vulkan/transfer_tensor.h"
 
 namespace amber {
 namespace vulkan {
@@ -421,7 +423,7 @@ Result Pipeline::AddBufferDescriptor(const BufferCommand* cmd) {
   if (!cmd->IsSSBO() && !cmd->IsUniform() && !cmd->IsStorageImage() &&
       !cmd->IsSampledImage() && !cmd->IsCombinedImageSampler() &&
       !cmd->IsUniformTexelBuffer() && !cmd->IsStorageTexelBuffer() &&
-      !cmd->IsUniformDynamic() && !cmd->IsSSBODynamic()) {
+      !cmd->IsUniformDynamic() && !cmd->IsSSBODynamic() && !cmd->IsTensor()) {
     return Result("Pipeline::AddBufferDescriptor not supported buffer type");
   }
 
@@ -456,6 +458,8 @@ Result Pipeline::AddBufferDescriptor(const BufferCommand* cmd) {
     desc_type = DescriptorType::kUniformBufferDynamic;
   } else if (cmd->IsSSBODynamic()) {
     desc_type = DescriptorType::kStorageBufferDynamic;
+  } else if (cmd->IsTensor()) {
+    desc_type = DescriptorType::kTensor;
   }
 
   if (desc == nullptr) {
@@ -468,6 +472,10 @@ Result Pipeline::AddBufferDescriptor(const BufferCommand* cmd) {
       }
 
       descriptors.push_back(std::move(image_desc));
+    } else if (cmd->IsTensor()) {
+      descriptors.push_back(std::make_unique<TensorDescriptor>(
+          cmd->GetBuffer(), device_, cmd->GetDescriptorSet(), cmd->GetBinding(),
+          this));
     } else {
       auto buffer_desc = std::make_unique<BufferDescriptor>(
           cmd->GetBuffer(), desc_type, device_, cmd->GetDescriptorSet(),
@@ -774,6 +782,11 @@ Result Pipeline::SendDescriptorDataToDeviceIfNeeded() {
 
       transfer_image->ImageBarrier(GetCommandBuffer(), VK_IMAGE_LAYOUT_GENERAL,
                                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+    } else if (auto transfer_tensor =
+                   descriptor_transfer_resources_[buffer]->AsTransferTensor()) {
+      transfer_tensor->WritePacked(*buffer->ValuePtr());
+      buffer->ValuePtr()->clear();
+      transfer_tensor->CopyToDevice(GetCommandBuffer());
     } else {
       return Result(
           "Vulkan: Pipeline::SendDescriptorDataToDeviceIfNeeded() "
@@ -858,6 +871,9 @@ Result Pipeline::ReadbackDescriptorsToHostDataQueue() {
         if (!r.IsSuccess()) {
           return r;
         }
+      } else if (auto transfer_tensor = descriptor_transfer_resources_[buffer]
+                                            ->AsTransferTensor()) {
+        transfer_tensor->CopyToHost(GetCommandBuffer());
       } else {
         return Result(
             "Vulkan: Pipeline::ReadbackDescriptorsToHostDataQueue() "
@@ -875,6 +891,10 @@ Result Pipeline::ReadbackDescriptorsToHostDataQueue() {
   // Move data from transfer buffers to output buffers.
   for (auto& buffer : descriptor_buffers_) {
     auto& transfer_resource = descriptor_transfer_resources_[buffer];
+    if (auto transfer_tensor = transfer_resource->AsTransferTensor()) {
+      transfer_tensor->ReadPacked(buffer->ValuePtr());
+      continue;
+    }
     Result r = BufferBackedDescriptor::MoveTransferResourceToBufferOutput(
         transfer_resource.get(), buffer);
     if (!r.IsSuccess()) {

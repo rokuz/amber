@@ -52,6 +52,7 @@ class ConfigHelperVulkan : public ConfigHelperImpl {
       const std::vector<std::string>& required_device_extensions,
       bool disable_validation_layer,
       bool enable_pipeline_runtime_layer,
+      const std::string& layer_library,
       bool show_version_info,
       std::unique_ptr<amber::EngineConfig>* config) override;
 

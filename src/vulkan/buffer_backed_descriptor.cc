@@ -101,6 +101,7 @@ bool BufferBackedDescriptor::IsReadOnly() const {
     case DescriptorType::kStorageBufferDynamic:
     case DescriptorType::kStorageTexelBuffer:
     case DescriptorType::kStorageImage:
+    case DescriptorType::kTensor:
       return false;
     default:
       assert(false && "Unexpected descriptor type");

@@ -71,6 +71,7 @@ struct Options {
   bool log_execution_timing = false;
   bool disable_spirv_validation = false;
   bool enable_pipeline_runtime_layer = false;
+  std::string layer_library;
   std::string shader_filename;
   amber::EngineType engine = amber::kEngineTypeVulkan;
   std::string spv_env;
@@ -113,6 +114,10 @@ const char kUsage[] = R"(Usage: amber [options] SCRIPT [SCRIPTS...]
   --log-execution-timing    -- Log timing results from each command with the 'TIMED_EXECUTION' flag.
   --disable-spirv-val       -- Disable SPIR-V validation.
   --enable-runtime-layer    -- Enable pipeline runtime layer.
+  --layer-library <path>    -- Load a Vulkan layer from the library at |path| and insert it
+                               between Amber and the Vulkan loader, without a layer manifest
+                               (Vulkan only). For example the ML emulation layer
+                               (VkLayer_Tensor) to run VK_ARM_tensors scripts.
   -h                        -- This help text.
 )";
 
@@ -306,6 +311,13 @@ bool ParseArgs(const std::vector<std::string>& args, Options* opts) {
       opts->disable_spirv_validation = true;
     } else if (arg == "--enable-runtime-layer") {
       opts->enable_pipeline_runtime_layer = true;
+    } else if (arg == "--layer-library") {
+      ++i;
+      if (i >= args.size() || args[i].empty()) {
+        std::cerr << "Missing value for --layer-library argument." << std::endl;
+        return false;
+      }
+      opts->layer_library = args[i];
     } else if (arg.size() > 0 && arg[0] == '-') {
       std::cerr << "Unrecognized option " << arg << std::endl;
       return false;
@@ -629,7 +641,7 @@ int main(int argc, const char** argv) {
       std::vector<std::string>(required_device_extensions.begin(),
                                required_device_extensions.end()),
       options.disable_validation_layer, options.enable_pipeline_runtime_layer,
-      options.show_version_info, &config);
+      options.layer_library, options.show_version_info, &config);
 
   if (!r.IsSuccess()) {
     std::cout << r.Error() << std::endl;

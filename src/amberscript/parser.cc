@@ -365,6 +365,8 @@ Result Parser::Parse(const std::string& data) {
       r = ParseShaderBlock();
     } else if (tok == "STRUCT") {
       r = ParseStruct();
+    } else if (tok == "TENSOR") {
+      r = ParseTensor();
     } else if (tok == "SAMPLER") {
       r = ParseSampler();
     } else if (tok == "VIRTUAL_FILE") {
@@ -1314,6 +1316,8 @@ Result Parser::ToBufferType(const std::string& name, BufferType* type) {
     *type = BufferType::kTransformFeedback;
   } else if (name == "input_attachment") {
     *type = BufferType::kInputAttachment;
+  } else if (name == "tensor") {
+    *type = BufferType::kTensor;
   } else {
     return Result("unknown buffer_type: " + name);
   }
@@ -1565,7 +1569,14 @@ Result Parser::ParsePipelineBind(Pipeline* pipeline) {
         buffer_type == BufferType::kSampledImage ||
         buffer_type == BufferType::kCombinedImageSampler ||
         buffer_type == BufferType::kUniformTexelBuffer ||
-        buffer_type == BufferType::kStorageTexelBuffer) {
+        buffer_type == BufferType::kStorageTexelBuffer ||
+        buffer_type == BufferType::kTensor) {
+      for (const auto* buf : buffers) {
+        if (buffer_type == BufferType::kTensor && !buf->IsTensor()) {
+          return Result("buffer " + buf->GetName() +
+                        " bound AS tensor must be declared with TENSOR");
+        }
+      }
       // If the buffer type is known, then we proccessed the AS block above
       // and have to advance to the next token. Otherwise, we're already on
       // the next token and don't want to advance.
@@ -3032,6 +3043,158 @@ Result Parser::ParseImage() {
   }
 
   return {};
+}
+
+Result Parser::ParseTensor() {
+  auto token = tokenizer_->NextToken();
+  if (!token->IsIdentifier()) {
+    return Result("invalid TENSOR name provided");
+  }
+  auto name = token->AsString();
+  if (name == "DATA_TYPE") {
+    return Result("missing TENSOR name");
+  }
+
+  token = tokenizer_->NextToken();
+  if (!token->IsIdentifier() || token->AsString() != "DATA_TYPE") {
+    return Result("TENSOR missing DATA_TYPE");
+  }
+  token = tokenizer_->NextToken();
+  if (!token->IsIdentifier()) {
+    return Result("TENSOR invalid data type");
+  }
+  auto new_type = ToType(token->AsString());
+  if (!new_type || !new_type->IsNumber() || new_type->IsVec() ||
+      new_type->IsMatrix()) {
+    return Result("TENSOR data type must be a scalar number type: " +
+                  token->AsString());
+  }
+  auto buffer = std::make_unique<Buffer>();
+  auto fmt = std::make_unique<Format>(new_type.get());
+  buffer->SetFormat(fmt.get());
+  const uint32_t element_size = fmt->SizeInBytes();
+  const auto mode = new_type->AsNumber()->GetFormatMode();
+  const bool is_integer =
+      mode == FormatMode::kUInt || mode == FormatMode::kSInt;
+  script_->RegisterType(std::move(new_type));
+  script_->RegisterFormat(std::move(fmt));
+
+  token = tokenizer_->NextToken();
+  if (token->IsIdentifier() && token->AsString() == "ENCODING") {
+    token = tokenizer_->NextToken();
+    if (!token->IsIdentifier()) {
+      return Result("TENSOR missing ENCODING value");
+    }
+    const auto& encoding = token->AsString();
+    TensorEncoding value = TensorEncoding::kNone;
+    uint32_t bytes = 1;
+    if (encoding == "BOOL") {
+      value = TensorEncoding::kBool;
+    } else if (encoding == "BFLOAT16") {
+      value = TensorEncoding::kBFloat16;
+      bytes = 2;
+    } else if (encoding == "FLOAT8_E4M3") {
+      value = TensorEncoding::kFloat8E4M3;
+    } else if (encoding == "FLOAT8_E5M2") {
+      value = TensorEncoding::kFloat8E5M2;
+    } else {
+      return Result("unknown TENSOR ENCODING: " + encoding);
+    }
+    if (!is_integer || element_size != bytes) {
+      return Result("TENSOR ENCODING " + encoding + " needs a " +
+                    std::to_string(bytes * 8) + "-bit integer DATA_TYPE");
+    }
+    buffer->SetTensorEncoding(value);
+    token = tokenizer_->NextToken();
+  }
+
+  if (!token->IsIdentifier() || token->AsString() != "DIMS") {
+    return Result("TENSOR missing DIMS");
+  }
+  std::vector<uint64_t> dims;
+  uint64_t element_count = 1;
+  for (token = tokenizer_->PeekNextToken(); token->IsInteger();
+       token = tokenizer_->PeekNextToken()) {
+    tokenizer_->NextToken();
+    const uint64_t dim = token->AsUint64();
+    if (dim == 0) {
+      return Result("TENSOR dimensions must be positive");
+    }
+    dims.push_back(dim);
+    element_count *= dim;
+    if (element_count > 0xffffffffULL / element_size) {
+      return Result("TENSOR is too large");
+    }
+  }
+  if (dims.empty()) {
+    return Result("TENSOR DIMS needs at least one dimension");
+  }
+  buffer->SetTensorDims(dims);
+
+  if (token->IsIdentifier() && token->AsString() == "STRIDES") {
+    tokenizer_->NextToken();
+    std::vector<uint64_t> strides;
+    for (token = tokenizer_->PeekNextToken(); token->IsInteger();
+         token = tokenizer_->PeekNextToken()) {
+      tokenizer_->NextToken();
+      strides.push_back(token->AsUint64());
+    }
+    if (strides.size() != dims.size()) {
+      return Result("TENSOR STRIDES needs one stride per dimension");
+    }
+    if (strides.back() != element_size) {
+      return Result("TENSOR innermost stride must be the element size (" +
+                    std::to_string(element_size) + ")");
+    }
+    for (size_t i = 0; i < strides.size(); ++i) {
+      if (strides[i] % element_size != 0) {
+        return Result("TENSOR strides must be multiples of the element size");
+      }
+      if (i + 1 < strides.size() && strides[i] < strides[i + 1] * dims[i + 1]) {
+        return Result("TENSOR stride " + std::to_string(i) +
+                      " overlaps the next dimension");
+      }
+    }
+    if (strides[0] * dims[0] > 0xffffffffULL) {
+      return Result("TENSOR is too large");
+    }
+    buffer->SetTensorStrides(strides);
+  }
+
+  const auto count = static_cast<uint32_t>(element_count);
+  buffer->SetElementCount(count);
+  token = tokenizer_->NextToken();
+  Result r;
+  if (token->IsIdentifier() && token->AsString() == "FILL") {
+    r = ParseBufferInitializerFill(buffer.get(), count);
+  } else if (token->IsIdentifier() && token->AsString() == "SERIES_FROM") {
+    r = ParseBufferInitializerSeries(buffer.get(), count);
+  } else if (token->IsIdentifier() && token->AsString() == "DATA") {
+    r = ParseBufferInitializerData(buffer.get());
+  } else if (token->IsIdentifier() && token->AsString() == "FILE") {
+    r = ParseBufferInitializerFile(buffer.get());
+    if (r.IsSuccess()) {
+      r = ValidateEndOfStatement("TENSOR command");
+    }
+  } else if (token->IsEOL() || token->IsEOS()) {
+    buffer->SetSizeInElements(count);
+  } else {
+    return Result("unknown TENSOR initializer: " + token->ToOriginalString());
+  }
+  if (!r.IsSuccess()) {
+    return r;
+  }
+
+  const size_t expected = static_cast<size_t>(element_count) * element_size;
+  if (buffer->ValuePtr()->size() != expected) {
+    return Result("TENSOR " + name + " has " +
+                  std::to_string(buffer->ValuePtr()->size()) +
+                  " bytes of data but its DIMS need " +
+                  std::to_string(expected));
+  }
+  buffer->SetElementCount(count);
+  buffer->SetName(name);
+  return script_->AddBuffer(std::move(buffer));
 }
 
 Result Parser::ParseBufferInitializer(Buffer* buffer) {

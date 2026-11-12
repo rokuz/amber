@@ -36,6 +36,7 @@ class CommandBuffer;
 class Device;
 class TransferBuffer;
 class TransferImage;
+class TransferTensor;
 class BLAS;
 class TLAS;
 class SBT;
@@ -66,6 +67,7 @@ class Resource {
   virtual Result Initialize() = 0;
   virtual TransferBuffer* AsTransferBuffer() { return nullptr; }
   virtual TransferImage* AsTransferImage() { return nullptr; }
+  virtual TransferTensor* AsTransferTensor() { return nullptr; }
   virtual void AddAllocateFlags(VkMemoryAllocateFlags memory_allocate_flags) {
     memory_allocate_flags_ |= memory_allocate_flags;
   }

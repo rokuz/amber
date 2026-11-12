@@ -169,6 +169,12 @@ with:
  * `ComputeShaderDerivativesPropertiesKHR.meshAndTaskShaderDerivatives` (a
    property: the device must report `meshAndTaskShaderDerivatives`; it enables
    nothing)
+ * `TensorFeaturesARM.tensors`
+ * `TensorFeaturesARM.shaderTensorAccess`
+ * `TensorFeaturesARM.tensorNonPacked`
+ * `TensorFeaturesARM.shaderStorageTensorArrayDynamicIndexing`
+ * `TensorFeaturesARM.shaderStorageTensorArrayNonUniformIndexing`
+ * `TensorFeaturesARM.descriptorBindingStorageTensorUpdateAfterBind`
 
 A feature of an extension feature structure (such as `RayQueryFeaturesKHR`,
 `MeshShaderFeaturesEXT` or `DescriptorIndexingFeatures`) also enables the
@@ -477,6 +483,58 @@ SERIES_FROM _start_ INC_BY _inc_
 # Buffers used as copy destination can be used only as copy destination, and as
 # argument to an EXPECT command.
 COPY {buffer_from} TO {buffer_to}
+```
+
+### Tensors
+
+A tensor (`VK_ARM_tensors`) is a buffer with a shape: an element data type,
+dimensions and, optionally, strides. Its data is given like a buffer's, as the
+elements packed in row-major order (the last dimension varies fastest).
+Tensors are bound with `AS tensor` (see Pipeline Buffers), can be checked with
+`EXPECT` and dumped like any buffer, and can also be bound `AS storage` in
+another pipeline, which then sees the packed elements.
+
+```groovy
+# Creates a tensor of |type| elements with the given dimensions, outermost
+# first. |type| is a scalar number type (int8, uint16, float16, float, double,
+# ...). Without an initializer the tensor is filled with zeros. With STRIDES
+# (in bytes, one per dimension, the last one equal to the element size) the
+# tensor is not packed (`DEVICE_FEATURE TensorFeaturesARM.tensorNonPacked`):
+# Amber places the elements at their strided offsets in the tensor memory and
+# reads them back packed.
+TENSOR {name} DATA_TYPE {type} [ ENCODING {encoding} ] DIMS {d0} [{d1} ...] \
+    [ STRIDES {s0} [{s1} ...] ] [ {initializer} ]
+```
+
+The initializer is `DATA ... END`, `FILL`, `SERIES_FROM` (see Buffer
+Initializers) or `FILE` (as for buffers); the data must have exactly one value
+per element.
+
+`ENCODING` selects tensor formats that have no data type of their own; the
+data is given as the raw bits in an integer data type of the same width:
+ * `BOOL`: `VK_FORMAT_R8_BOOL_ARM`, `uint8` or `int8` data (0 or 1)
+ * `BFLOAT16`: `VK_FORMAT_R16_SFLOAT_FPENCODING_BFLOAT16_ARM`, 16-bit data
+ * `FLOAT8_E4M3`: `VK_FORMAT_R8_SFLOAT_FPENCODING_FLOAT8E4M3_ARM`, 8-bit data
+ * `FLOAT8_E5M2`: `VK_FORMAT_R8_SFLOAT_FPENCODING_FLOAT8E5M2_ARM`, 8-bit data
+
+Other data types use the matching single-component format (`float` is
+`VK_FORMAT_R32_SFLOAT`, `int8` is `VK_FORMAT_R8_SINT`, ...).
+
+Amber creates each tensor with linear tiling and the usages
+`VK_TENSOR_USAGE_SHADER_BIT_ARM`, `TRANSFER_SRC` and `TRANSFER_DST`, binds it
+to host visible, host coherent memory and writes and reads that memory
+directly, with memory barriers before and after the pipeline runs. A script
+with tensors needs `DEVICE_FEATURE TensorFeaturesARM.tensors` (and usually
+`TensorFeaturesARM.shaderTensorAccess`), which also enables
+`VK_ARM_tensors`.
+
+On a driver without `VK_ARM_tensors`, Arm's ML emulation layer for Vulkan
+provides it; the `amber` sample can load the layer library directly with
+`--layer-library` (the tensor layer is `VkLayer_Tensor`), which needs no layer
+manifest and no environment variable:
+
+```
+amber --layer-library /path/to/libVkLayer_Tensor.so script.amber
 ```
 
 ### Samplers
@@ -1049,6 +1107,8 @@ when using a Vulkan backend.
  * `storage_dynamic`
  * `uniform_texel_buffer`
  * `storage_texel_buffer`
+ * `tensor` (a `TENSOR`, bound as `VK_DESCRIPTOR_TYPE_TENSOR_ARM`; with
+   `BUFFER_ARRAY` the tensors are the elements of an array of tensors)
 
 TODO(dsinclair): Sync the BufferTypes with the list of Vulkan Descriptor types.
 

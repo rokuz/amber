@@ -85,6 +85,7 @@ amber::Result ConfigHelperDawn::CreateConfig(
     const std::vector<std::string>&,
     bool,
     bool,
+    const std::string&,
     bool,
     std::unique_ptr<amber::EngineConfig>* config) {
   const char* allow_unsafe_apis = "allow_unsafe_apis";

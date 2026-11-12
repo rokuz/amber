@@ -255,16 +255,24 @@ bool Script::IsKnownFeature(const std::string& name) const {
          name == "ShaderAtomicFloatFeaturesEXT.sparseImageFloat32AtomicAdd" ||
          name == "ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat16Atomics" ||
          name == "ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat16AtomicAdd" ||
-         name == "ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat16AtomicMinMax" ||
-         name == "ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat32AtomicMinMax" ||
-         name == "ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat64AtomicMinMax" ||
+         name ==
+             "ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat16AtomicMinMax" ||
+         name ==
+             "ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat32AtomicMinMax" ||
+         name ==
+             "ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat64AtomicMinMax" ||
          name == "ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat16Atomics" ||
          name == "ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat16AtomicAdd" ||
-         name == "ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat16AtomicMinMax" ||
-         name == "ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat32AtomicMinMax" ||
-         name == "ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat64AtomicMinMax" ||
-         name == "ShaderAtomicFloat2FeaturesEXT.shaderImageFloat32AtomicMinMax" ||
-         name == "ShaderAtomicFloat2FeaturesEXT.sparseImageFloat32AtomicMinMax" ||
+         name ==
+             "ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat16AtomicMinMax" ||
+         name ==
+             "ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat32AtomicMinMax" ||
+         name ==
+             "ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat64AtomicMinMax" ||
+         name ==
+             "ShaderAtomicFloat2FeaturesEXT.shaderImageFloat32AtomicMinMax" ||
+         name ==
+             "ShaderAtomicFloat2FeaturesEXT.sparseImageFloat32AtomicMinMax" ||
          name == "ShaderImageAtomicInt64FeaturesEXT.shaderImageInt64Atomics" ||
          name == "ShaderImageAtomicInt64FeaturesEXT.sparseImageInt64Atomics" ||
          name == "MultiviewFeatures.multiview" ||
@@ -272,32 +280,55 @@ bool Script::IsKnownFeature(const std::string& name) const {
          name == "MultiviewFeatures.multiviewTessellationShader" ||
          name == "TransformFeedbackFeaturesEXT.transformFeedback" ||
          name == "TransformFeedbackFeaturesEXT.geometryStreams" ||
-         name == "ShaderReplicatedCompositesFeaturesEXT.shaderReplicatedComposites" ||
-         name == "ComputeShaderDerivativesFeaturesKHR.computeDerivativeGroupQuads" ||
-         name == "ComputeShaderDerivativesFeaturesKHR.computeDerivativeGroupLinear" ||
+         name ==
+             "ShaderReplicatedCompositesFeaturesEXT."
+             "shaderReplicatedComposites" ||
+         name ==
+             "ComputeShaderDerivativesFeaturesKHR."
+             "computeDerivativeGroupQuads" ||
+         name ==
+             "ComputeShaderDerivativesFeaturesKHR."
+             "computeDerivativeGroupLinear" ||
          name == "ShaderSubgroupRotateFeaturesKHR.shaderSubgroupRotate" ||
-         name == "ShaderSubgroupRotateFeaturesKHR.shaderSubgroupRotateClustered" ||
+         name ==
+             "ShaderSubgroupRotateFeaturesKHR.shaderSubgroupRotateClustered" ||
          name == "ShaderQuadControlFeaturesKHR.shaderQuadControl" ||
-         name == "FragmentShaderInterlockFeaturesEXT.fragmentShaderSampleInterlock" ||
-         name == "FragmentShaderInterlockFeaturesEXT.fragmentShaderPixelInterlock" ||
-         name == "FragmentShaderInterlockFeaturesEXT.fragmentShaderShadingRateInterlock" ||
+         name ==
+             "FragmentShaderInterlockFeaturesEXT."
+             "fragmentShaderSampleInterlock" ||
+         name ==
+             "FragmentShaderInterlockFeaturesEXT."
+             "fragmentShaderPixelInterlock" ||
+         name ==
+             "FragmentShaderInterlockFeaturesEXT."
+             "fragmentShaderShadingRateInterlock" ||
          name == "ShaderImageFootprintFeaturesNV.imageFootprint" ||
-         name == "ShaderRelaxedExtendedInstructionFeaturesKHR."
-                 "shaderRelaxedExtendedInstruction" ||
+         name ==
+             "ShaderRelaxedExtendedInstructionFeaturesKHR."
+             "shaderRelaxedExtendedInstruction" ||
          name == "FragmentDensityMapFeaturesEXT.fragmentDensityMap" ||
          name == "ShadingRateImageFeaturesNV.shadingRateImage" ||
-         name == "ComputeShaderDerivativesPropertiesKHR."
-                 "meshAndTaskShaderDerivatives" ||
+         name ==
+             "ComputeShaderDerivativesPropertiesKHR."
+             "meshAndTaskShaderDerivatives" ||
          name == "SubgroupSupportedOperations.partitionedNV" ||
          name == "ShaderLongVectorFeaturesEXT.longVector" ||
          name == "CooperativeMatrixFeaturesNV.cooperativeMatrix" ||
-         name == "CooperativeMatrixFeaturesNV.cooperativeMatrixRobustBufferAccess" ||
-         name == "CooperativeMatrix2FeaturesNV.cooperativeMatrixWorkgroupScope" ||
-         name == "CooperativeMatrix2FeaturesNV.cooperativeMatrixFlexibleDimensions" ||
+         name ==
+             "CooperativeMatrixFeaturesNV."
+             "cooperativeMatrixRobustBufferAccess" ||
+         name ==
+             "CooperativeMatrix2FeaturesNV.cooperativeMatrixWorkgroupScope" ||
+         name ==
+             "CooperativeMatrix2FeaturesNV."
+             "cooperativeMatrixFlexibleDimensions" ||
          name == "CooperativeMatrix2FeaturesNV.cooperativeMatrixReductions" ||
          name == "CooperativeMatrix2FeaturesNV.cooperativeMatrixConversions" ||
-         name == "CooperativeMatrix2FeaturesNV.cooperativeMatrixPerElementOperations" ||
-         name == "CooperativeMatrix2FeaturesNV.cooperativeMatrixTensorAddressing" ||
+         name ==
+             "CooperativeMatrix2FeaturesNV."
+             "cooperativeMatrixPerElementOperations" ||
+         name ==
+             "CooperativeMatrix2FeaturesNV.cooperativeMatrixTensorAddressing" ||
          name == "CooperativeMatrix2FeaturesNV.cooperativeMatrixBlockLoads" ||
          name == "CooperativeVectorFeaturesNV.cooperativeVector" ||
          name == "CooperativeVectorFeaturesNV.cooperativeVectorTraining" ||
@@ -305,7 +336,15 @@ bool Script::IsKnownFeature(const std::string& name) const {
          name == "ShaderBfloat16FeaturesKHR.shaderBFloat16DotProduct" ||
          name == "ShaderBfloat16FeaturesKHR.shaderBFloat16CooperativeMatrix" ||
          name == "ShaderFloat8FeaturesEXT.shaderFloat8" ||
-         name == "ShaderFloat8FeaturesEXT.shaderFloat8CooperativeMatrix";
+         name == "ShaderFloat8FeaturesEXT.shaderFloat8CooperativeMatrix" ||
+         name == "TensorFeaturesARM.tensors" ||
+         name == "TensorFeaturesARM.shaderTensorAccess" ||
+         name == "TensorFeaturesARM.tensorNonPacked" ||
+         name == "TensorFeaturesARM.shaderStorageTensorArrayDynamicIndexing" ||
+         name ==
+             "TensorFeaturesARM.shaderStorageTensorArrayNonUniformIndexing" ||
+         name ==
+             "TensorFeaturesARM.descriptorBindingStorageTensorUpdateAfterBind";
 }
 
 bool Script::IsKnownProperty(const std::string& name) const {

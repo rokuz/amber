@@ -135,6 +135,7 @@ if (${AMBER_ENABLE_TESTS})
     amberscript/parser_attach_test.cc
     amberscript/parser_bind_test.cc
     amberscript/parser_buffer_test.cc
+    amberscript/parser_tensor_test.cc
     amberscript/parser_clear_color_test.cc
     amberscript/parser_clear_depth_test.cc
     amberscript/parser_clear_stencil_test.cc
