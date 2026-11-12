@@ -114,7 +114,50 @@ DEVICE_FEATURE DescriptorIndexingFeatures.descriptorBindingVariableDescriptorCou
 DEVICE_FEATURE DescriptorIndexingFeatures.runtimeDescriptorArray
 DEVICE_FEATURE ShaderDemoteToHelperInvocationFeatures.shaderDemoteToHelperInvocation
 DEVICE_FEATURE ShaderAtomicInt64Features.shaderBufferInt64Atomics
-DEVICE_FEATURE ShaderAtomicInt64Features.shaderSharedInt64Atomics)";
+DEVICE_FEATURE ShaderAtomicInt64Features.shaderSharedInt64Atomics
+DEVICE_FEATURE ShaderExpectAssumeFeaturesKHR.shaderExpectAssume
+DEVICE_FEATURE ShaderAtomicFloatFeaturesEXT.shaderBufferFloat32Atomics
+DEVICE_FEATURE ShaderAtomicFloatFeaturesEXT.shaderBufferFloat32AtomicAdd
+DEVICE_FEATURE ShaderAtomicFloatFeaturesEXT.shaderBufferFloat64Atomics
+DEVICE_FEATURE ShaderAtomicFloatFeaturesEXT.shaderBufferFloat64AtomicAdd
+DEVICE_FEATURE ShaderAtomicFloatFeaturesEXT.shaderSharedFloat32Atomics
+DEVICE_FEATURE ShaderAtomicFloatFeaturesEXT.shaderSharedFloat32AtomicAdd
+DEVICE_FEATURE ShaderAtomicFloatFeaturesEXT.shaderSharedFloat64Atomics
+DEVICE_FEATURE ShaderAtomicFloatFeaturesEXT.shaderSharedFloat64AtomicAdd
+DEVICE_FEATURE ShaderAtomicFloatFeaturesEXT.shaderImageFloat32Atomics
+DEVICE_FEATURE ShaderAtomicFloatFeaturesEXT.shaderImageFloat32AtomicAdd
+DEVICE_FEATURE ShaderAtomicFloatFeaturesEXT.sparseImageFloat32Atomics
+DEVICE_FEATURE ShaderAtomicFloatFeaturesEXT.sparseImageFloat32AtomicAdd
+DEVICE_FEATURE ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat16Atomics
+DEVICE_FEATURE ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat16AtomicAdd
+DEVICE_FEATURE ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat16AtomicMinMax
+DEVICE_FEATURE ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat32AtomicMinMax
+DEVICE_FEATURE ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat64AtomicMinMax
+DEVICE_FEATURE ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat16Atomics
+DEVICE_FEATURE ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat16AtomicAdd
+DEVICE_FEATURE ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat16AtomicMinMax
+DEVICE_FEATURE ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat32AtomicMinMax
+DEVICE_FEATURE ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat64AtomicMinMax
+DEVICE_FEATURE ShaderAtomicFloat2FeaturesEXT.shaderImageFloat32AtomicMinMax
+DEVICE_FEATURE ShaderAtomicFloat2FeaturesEXT.sparseImageFloat32AtomicMinMax
+DEVICE_FEATURE ShaderImageAtomicInt64FeaturesEXT.shaderImageInt64Atomics
+DEVICE_FEATURE ShaderImageAtomicInt64FeaturesEXT.sparseImageInt64Atomics
+DEVICE_FEATURE MultiviewFeatures.multiview
+DEVICE_FEATURE MultiviewFeatures.multiviewGeometryShader
+DEVICE_FEATURE MultiviewFeatures.multiviewTessellationShader
+DEVICE_FEATURE TransformFeedbackFeaturesEXT.transformFeedback
+DEVICE_FEATURE TransformFeedbackFeaturesEXT.geometryStreams
+DEVICE_FEATURE SubgroupSupportedOperations.partitionedNV
+DEVICE_FEATURE ShaderReplicatedCompositesFeaturesEXT.shaderReplicatedComposites
+DEVICE_FEATURE ComputeShaderDerivativesFeaturesKHR.computeDerivativeGroupQuads
+DEVICE_FEATURE ComputeShaderDerivativesFeaturesKHR.computeDerivativeGroupLinear
+DEVICE_FEATURE ShaderSubgroupRotateFeaturesKHR.shaderSubgroupRotate
+DEVICE_FEATURE ShaderSubgroupRotateFeaturesKHR.shaderSubgroupRotateClustered
+DEVICE_FEATURE ShaderQuadControlFeaturesKHR.shaderQuadControl
+DEVICE_FEATURE FragmentShaderInterlockFeaturesEXT.fragmentShaderSampleInterlock
+DEVICE_FEATURE FragmentShaderInterlockFeaturesEXT.fragmentShaderPixelInterlock
+DEVICE_FEATURE FragmentShaderInterlockFeaturesEXT.fragmentShaderShadingRateInterlock
+DEVICE_FEATURE ShaderImageFootprintFeaturesNV.imageFootprint)";
 
   Parser parser;
   Result r = parser.Parse(in);
@@ -122,7 +165,7 @@ DEVICE_FEATURE ShaderAtomicInt64Features.shaderSharedInt64Atomics)";
 
   auto script = parser.GetScript();
   const auto& features = script->GetRequiredFeatures();
-  ASSERT_EQ(39U, features.size());
+  ASSERT_EQ(82U, features.size());
   EXPECT_EQ("RayTracingPipelineFeaturesKHR.rayTraversalPrimitiveCulling",
             features[0]);
   EXPECT_EQ("RayTracingPositionFetchFeaturesKHR.rayTracingPositionFetch",
@@ -233,6 +276,84 @@ DEVICE_FEATURE ShaderAtomicInt64Features.shaderSharedInt64Atomics)";
       features[36]);
   EXPECT_EQ("ShaderAtomicInt64Features.shaderBufferInt64Atomics", features[37]);
   EXPECT_EQ("ShaderAtomicInt64Features.shaderSharedInt64Atomics", features[38]);
+  EXPECT_EQ("ShaderExpectAssumeFeaturesKHR.shaderExpectAssume", features[39]);
+  EXPECT_EQ("ShaderAtomicFloatFeaturesEXT.shaderBufferFloat32Atomics",
+            features[40]);
+  EXPECT_EQ("ShaderAtomicFloatFeaturesEXT.shaderBufferFloat32AtomicAdd",
+            features[41]);
+  EXPECT_EQ("ShaderAtomicFloatFeaturesEXT.shaderBufferFloat64Atomics",
+            features[42]);
+  EXPECT_EQ("ShaderAtomicFloatFeaturesEXT.shaderBufferFloat64AtomicAdd",
+            features[43]);
+  EXPECT_EQ("ShaderAtomicFloatFeaturesEXT.shaderSharedFloat32Atomics",
+            features[44]);
+  EXPECT_EQ("ShaderAtomicFloatFeaturesEXT.shaderSharedFloat32AtomicAdd",
+            features[45]);
+  EXPECT_EQ("ShaderAtomicFloatFeaturesEXT.shaderSharedFloat64Atomics",
+            features[46]);
+  EXPECT_EQ("ShaderAtomicFloatFeaturesEXT.shaderSharedFloat64AtomicAdd",
+            features[47]);
+  EXPECT_EQ("ShaderAtomicFloatFeaturesEXT.shaderImageFloat32Atomics",
+            features[48]);
+  EXPECT_EQ("ShaderAtomicFloatFeaturesEXT.shaderImageFloat32AtomicAdd",
+            features[49]);
+  EXPECT_EQ("ShaderAtomicFloatFeaturesEXT.sparseImageFloat32Atomics",
+            features[50]);
+  EXPECT_EQ("ShaderAtomicFloatFeaturesEXT.sparseImageFloat32AtomicAdd",
+            features[51]);
+  EXPECT_EQ("ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat16Atomics",
+            features[52]);
+  EXPECT_EQ("ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat16AtomicAdd",
+            features[53]);
+  EXPECT_EQ("ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat16AtomicMinMax",
+            features[54]);
+  EXPECT_EQ("ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat32AtomicMinMax",
+            features[55]);
+  EXPECT_EQ("ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat64AtomicMinMax",
+            features[56]);
+  EXPECT_EQ("ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat16Atomics",
+            features[57]);
+  EXPECT_EQ("ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat16AtomicAdd",
+            features[58]);
+  EXPECT_EQ("ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat16AtomicMinMax",
+            features[59]);
+  EXPECT_EQ("ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat32AtomicMinMax",
+            features[60]);
+  EXPECT_EQ("ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat64AtomicMinMax",
+            features[61]);
+  EXPECT_EQ("ShaderAtomicFloat2FeaturesEXT.shaderImageFloat32AtomicMinMax",
+            features[62]);
+  EXPECT_EQ("ShaderAtomicFloat2FeaturesEXT.sparseImageFloat32AtomicMinMax",
+            features[63]);
+  EXPECT_EQ("ShaderImageAtomicInt64FeaturesEXT.shaderImageInt64Atomics",
+            features[64]);
+  EXPECT_EQ("ShaderImageAtomicInt64FeaturesEXT.sparseImageInt64Atomics",
+            features[65]);
+  EXPECT_EQ("MultiviewFeatures.multiview", features[66]);
+  EXPECT_EQ("MultiviewFeatures.multiviewGeometryShader", features[67]);
+  EXPECT_EQ("MultiviewFeatures.multiviewTessellationShader", features[68]);
+  EXPECT_EQ("TransformFeedbackFeaturesEXT.transformFeedback", features[69]);
+  EXPECT_EQ("TransformFeedbackFeaturesEXT.geometryStreams", features[70]);
+  EXPECT_EQ("SubgroupSupportedOperations.partitionedNV", features[71]);
+  EXPECT_EQ("ShaderReplicatedCompositesFeaturesEXT.shaderReplicatedComposites",
+            features[72]);
+  EXPECT_EQ("ComputeShaderDerivativesFeaturesKHR.computeDerivativeGroupQuads",
+            features[73]);
+  EXPECT_EQ("ComputeShaderDerivativesFeaturesKHR.computeDerivativeGroupLinear",
+            features[74]);
+  EXPECT_EQ("ShaderSubgroupRotateFeaturesKHR.shaderSubgroupRotate",
+            features[75]);
+  EXPECT_EQ("ShaderSubgroupRotateFeaturesKHR.shaderSubgroupRotateClustered",
+            features[76]);
+  EXPECT_EQ("ShaderQuadControlFeaturesKHR.shaderQuadControl", features[77]);
+  EXPECT_EQ("FragmentShaderInterlockFeaturesEXT.fragmentShaderSampleInterlock",
+            features[78]);
+  EXPECT_EQ("FragmentShaderInterlockFeaturesEXT.fragmentShaderPixelInterlock",
+            features[79]);
+  EXPECT_EQ(
+      "FragmentShaderInterlockFeaturesEXT.fragmentShaderShadingRateInterlock",
+      features[80]);
+  EXPECT_EQ("ShaderImageFootprintFeaturesNV.imageFootprint", features[81]);
 }
 
 TEST_F(AmberScriptParserTest, DeviceFeatureSubgroupStages) {

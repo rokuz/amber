@@ -63,6 +63,11 @@ class Pipeline {
   /// Add |buffer| data to the push constants at |offset|.
   Result AddPushConstantBuffer(Buffer* buf, uint32_t offset);
 
+  /// Makes |buffer| live in the pipeline with a device address and writes
+  /// that address into |holder| at byte |offset| each time the pipeline sends
+  /// its buffers to the device.
+  Result AddBufferAddress(Buffer* buffer, Buffer* holder, uint32_t offset);
+
   /// Reads back the contents of resources of all descriptors to a
   /// buffer data object and put it into buffer data queue in host.
   Result ReadbackDescriptorsToHostDataQueue();
@@ -113,6 +118,8 @@ class Pipeline {
   /// Writes the device addresses of top level acceleration structures into
   /// the data of |buffer|, creating the acceleration structures if needed.
   Result WriteAccelerationStructureAddresses(Buffer* buffer);
+  Result CreateBufferAddressResources();
+  Result WriteBufferAddresses();
   void BindVkDescriptorSets(const VkPipelineLayout& pipeline_layout);
 
   /// Records a Vulkan command for push contant.
@@ -172,8 +179,16 @@ class Pipeline {
   std::vector<VkPipelineShaderStageCreateInfo> shader_stage_info_;
   std::unordered_map<Buffer*, std::unique_ptr<Resource>>
       descriptor_transfer_resources_;
-  /// Buffers used by descriptors (buffer descriptors and image descriptors).
+  /// Buffers used by descriptors (buffer descriptors and image descriptors)
+  /// and buffers whose device addresses the pipeline writes.
   std::vector<Buffer*> descriptor_buffers_;
+
+  struct BufferAddress {
+    Buffer* buffer = nullptr;
+    Buffer* holder = nullptr;
+    uint32_t offset = 0;
+  };
+  std::vector<BufferAddress> buffer_addresses_;
 
   uint32_t fence_timeout_ms_ = 1000;
   bool pipeline_runtime_layer_enabled_ = false;

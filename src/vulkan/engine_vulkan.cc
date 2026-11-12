@@ -337,6 +337,14 @@ Result EngineVulkan::CreatePipeline(amber::Pipeline* pipeline) {
     }
   }
 
+  for (const auto& address : pipeline->GetBufferAddresses()) {
+    r = info.vk_pipeline->AddBufferAddress(address.buffer, address.holder,
+                                           address.offset);
+    if (!r.IsSuccess()) {
+      return r;
+    }
+  }
+
   for (const auto& sampler_info : pipeline->GetSamplers()) {
     auto cmd = std::make_unique<SamplerCommand>(pipeline);
     cmd->SetDescriptorSet(sampler_info.descriptor_set);

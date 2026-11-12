@@ -240,6 +240,49 @@ bool Script::IsKnownFeature(const std::string& name) const {
              "shaderDemoteToHelperInvocation" ||
          name == "ShaderAtomicInt64Features.shaderBufferInt64Atomics" ||
          name == "ShaderAtomicInt64Features.shaderSharedInt64Atomics" ||
+         name == "ShaderExpectAssumeFeaturesKHR.shaderExpectAssume" ||
+         name == "ShaderAtomicFloatFeaturesEXT.shaderBufferFloat32Atomics" ||
+         name == "ShaderAtomicFloatFeaturesEXT.shaderBufferFloat32AtomicAdd" ||
+         name == "ShaderAtomicFloatFeaturesEXT.shaderBufferFloat64Atomics" ||
+         name == "ShaderAtomicFloatFeaturesEXT.shaderBufferFloat64AtomicAdd" ||
+         name == "ShaderAtomicFloatFeaturesEXT.shaderSharedFloat32Atomics" ||
+         name == "ShaderAtomicFloatFeaturesEXT.shaderSharedFloat32AtomicAdd" ||
+         name == "ShaderAtomicFloatFeaturesEXT.shaderSharedFloat64Atomics" ||
+         name == "ShaderAtomicFloatFeaturesEXT.shaderSharedFloat64AtomicAdd" ||
+         name == "ShaderAtomicFloatFeaturesEXT.shaderImageFloat32Atomics" ||
+         name == "ShaderAtomicFloatFeaturesEXT.shaderImageFloat32AtomicAdd" ||
+         name == "ShaderAtomicFloatFeaturesEXT.sparseImageFloat32Atomics" ||
+         name == "ShaderAtomicFloatFeaturesEXT.sparseImageFloat32AtomicAdd" ||
+         name == "ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat16Atomics" ||
+         name == "ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat16AtomicAdd" ||
+         name == "ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat16AtomicMinMax" ||
+         name == "ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat32AtomicMinMax" ||
+         name == "ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat64AtomicMinMax" ||
+         name == "ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat16Atomics" ||
+         name == "ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat16AtomicAdd" ||
+         name == "ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat16AtomicMinMax" ||
+         name == "ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat32AtomicMinMax" ||
+         name == "ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat64AtomicMinMax" ||
+         name == "ShaderAtomicFloat2FeaturesEXT.shaderImageFloat32AtomicMinMax" ||
+         name == "ShaderAtomicFloat2FeaturesEXT.sparseImageFloat32AtomicMinMax" ||
+         name == "ShaderImageAtomicInt64FeaturesEXT.shaderImageInt64Atomics" ||
+         name == "ShaderImageAtomicInt64FeaturesEXT.sparseImageInt64Atomics" ||
+         name == "MultiviewFeatures.multiview" ||
+         name == "MultiviewFeatures.multiviewGeometryShader" ||
+         name == "MultiviewFeatures.multiviewTessellationShader" ||
+         name == "TransformFeedbackFeaturesEXT.transformFeedback" ||
+         name == "TransformFeedbackFeaturesEXT.geometryStreams" ||
+         name == "ShaderReplicatedCompositesFeaturesEXT.shaderReplicatedComposites" ||
+         name == "ComputeShaderDerivativesFeaturesKHR.computeDerivativeGroupQuads" ||
+         name == "ComputeShaderDerivativesFeaturesKHR.computeDerivativeGroupLinear" ||
+         name == "ShaderSubgroupRotateFeaturesKHR.shaderSubgroupRotate" ||
+         name == "ShaderSubgroupRotateFeaturesKHR.shaderSubgroupRotateClustered" ||
+         name == "ShaderQuadControlFeaturesKHR.shaderQuadControl" ||
+         name == "FragmentShaderInterlockFeaturesEXT.fragmentShaderSampleInterlock" ||
+         name == "FragmentShaderInterlockFeaturesEXT.fragmentShaderPixelInterlock" ||
+         name == "FragmentShaderInterlockFeaturesEXT.fragmentShaderShadingRateInterlock" ||
+         name == "ShaderImageFootprintFeaturesNV.imageFootprint" ||
+         name == "SubgroupSupportedOperations.partitionedNV" ||
          name == "ShaderLongVectorFeaturesEXT.longVector";
 }
 

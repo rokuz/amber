@@ -72,6 +72,7 @@ std::unique_ptr<Pipeline> Pipeline::Clone() const {
   clone->resolve_targets_ = resolve_targets_;
   clone->vertex_buffers_ = vertex_buffers_;
   clone->buffers_ = buffers_;
+  clone->buffer_addresses_ = buffer_addresses_;
   clone->depth_stencil_buffer_ = depth_stencil_buffer_;
   clone->index_buffer_ = index_buffer_;
   clone->fb_width_ = fb_width_;
@@ -722,6 +723,30 @@ void Pipeline::AddTLAS(TLAS* tlas, uint32_t descriptor_set, uint32_t binding) {
 
   info.descriptor_set = descriptor_set;
   info.binding = binding;
+}
+
+Result Pipeline::AddBufferAddress(Buffer* buffer,
+                                  Buffer* holder,
+                                  uint32_t offset) {
+  if (buffer == nullptr || holder == nullptr) {
+    return Result("buffer address requires a buffer and a holder");
+  }
+  if (buffer->GetSizeInBytes() == 0) {
+    return Result("buffer " + buffer->GetName() +
+                  " is empty and has no device address");
+  }
+  if (static_cast<uint64_t>(offset) + sizeof(uint64_t) >
+      holder->GetSizeInBytes()) {
+    return Result("buffer address at OFFSET " + std::to_string(offset) +
+                  " does not fit in buffer " + holder->GetName());
+  }
+
+  BufferAddressInfo info;
+  info.buffer = buffer;
+  info.holder = holder;
+  info.offset = offset;
+  buffer_addresses_.push_back(info);
+  return {};
 }
 
 void Pipeline::ClearSamplers(uint32_t descriptor_set, uint32_t binding) {

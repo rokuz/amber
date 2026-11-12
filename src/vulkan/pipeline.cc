@@ -611,6 +611,73 @@ Result Pipeline::WriteAccelerationStructureAddresses(Buffer* buffer) {
   return {};
 }
 
+Result Pipeline::AddBufferAddress(Buffer* buffer,
+                                  Buffer* holder,
+                                  uint32_t offset) {
+  if (buffer == nullptr || holder == nullptr) {
+    return Result("Vulkan: Pipeline::AddBufferAddress buffer is nullptr");
+  }
+  BufferAddress address;
+  address.buffer = buffer;
+  address.holder = holder;
+  address.offset = offset;
+  buffer_addresses_.push_back(address);
+  return AddDescriptorBuffer(buffer);
+}
+
+Result Pipeline::CreateBufferAddressResources() {
+  for (const auto& address : buffer_addresses_) {
+    auto& resource = descriptor_transfer_resources_[address.buffer];
+    if (resource == nullptr) {
+      auto size_in_bytes =
+          static_cast<uint32_t>(address.buffer->ValuePtr()->size());
+      if (size_in_bytes == 0) {
+        return Result("Vulkan: buffer " + address.buffer->GetName() +
+                      " is empty and has no device address");
+      }
+      auto transfer_buffer =
+          std::make_unique<TransferBuffer>(device_, size_in_bytes, nullptr);
+      transfer_buffer->SetReadOnly(false);
+      resource = std::move(transfer_buffer);
+    }
+    auto* transfer_buffer = resource->AsTransferBuffer();
+    if (transfer_buffer == nullptr) {
+      return Result("Vulkan: image " + address.buffer->GetName() +
+                    " has no device address");
+    }
+    Result r = transfer_buffer->AddUsageFlags(
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+    if (!r.IsSuccess()) {
+      return r;
+    }
+    transfer_buffer->AddAllocateFlags(VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT);
+  }
+  return {};
+}
+
+Result Pipeline::WriteBufferAddresses() {
+  for (const auto& address : buffer_addresses_) {
+    auto resource = descriptor_transfer_resources_.find(address.buffer);
+    if (resource == descriptor_transfer_resources_.end() ||
+        resource->second->AsTransferBuffer() == nullptr) {
+      return Result("Vulkan: buffer " + address.buffer->GetName() +
+                    " has no device address in this pipeline");
+    }
+    const uint64_t value = static_cast<uint64_t>(
+        resource->second->AsTransferBuffer()->getBufferDeviceAddress());
+    auto* bytes = address.holder->ValuePtr();
+    if (static_cast<uint64_t>(address.offset) + sizeof(value) > bytes->size()) {
+      return Result("Vulkan: buffer address at offset " +
+                    std::to_string(address.offset) +
+                    " does not fit in buffer " + address.holder->GetName());
+    }
+    std::memcpy(bytes->data() + address.offset, &value, sizeof(value));
+  }
+  return {};
+}
+
 Result Pipeline::SendDescriptorDataToDeviceIfNeeded() {
   for (Buffer* buffer : descriptor_buffers_) {
     Result r = WriteAccelerationStructureAddresses(buffer);
@@ -640,6 +707,11 @@ Result Pipeline::SendDescriptorDataToDeviceIfNeeded() {
       }
     }
 
+    Result address_resources = CreateBufferAddressResources();
+    if (!address_resources.IsSuccess()) {
+      return address_resources;
+    }
+
     // Initialize transfer buffers / images.
     for (auto buffer : descriptor_buffers_) {
       if (descriptor_transfer_resources_.count(buffer) == 0) {
@@ -664,6 +736,13 @@ Result Pipeline::SendDescriptorDataToDeviceIfNeeded() {
     if (!r.IsSuccess()) {
       return r;
     }
+  }
+
+  // Device addresses are known once the transfer buffers exist, and must be
+  // in the data before it is copied to them.
+  Result addresses = WriteBufferAddresses();
+  if (!addresses.IsSuccess()) {
+    return addresses;
   }
 
   CommandBufferGuard guard(GetCommandBuffer());

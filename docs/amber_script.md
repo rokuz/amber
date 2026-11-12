@@ -61,6 +61,8 @@ with:
  * `SubgroupSupportedOperations.shuffleRelative`
  * `SubgroupSupportedOperations.clustered`
  * `SubgroupSupportedOperations.quad`
+ * `SubgroupSupportedOperations.partitionedNV` (`VK_SUBGROUP_FEATURE_PARTITIONED_BIT_NV`,
+   with `DEVICE_EXTENSION VK_NV_shader_subgroup_partitioned`)
  * `SubgroupSupportedStages.vertex`
  * `SubgroupSupportedStages.tessellationControl`
  * `SubgroupSupportedStages.tessellationEvaluation`
@@ -119,6 +121,48 @@ with:
  * `ShaderDemoteToHelperInvocationFeatures.shaderDemoteToHelperInvocation`
  * `ShaderAtomicInt64Features.shaderBufferInt64Atomics`
  * `ShaderAtomicInt64Features.shaderSharedInt64Atomics`
+ * `ShaderExpectAssumeFeaturesKHR.shaderExpectAssume`
+ * `ShaderAtomicFloatFeaturesEXT.shaderBufferFloat32Atomics`
+ * `ShaderAtomicFloatFeaturesEXT.shaderBufferFloat32AtomicAdd`
+ * `ShaderAtomicFloatFeaturesEXT.shaderBufferFloat64Atomics`
+ * `ShaderAtomicFloatFeaturesEXT.shaderBufferFloat64AtomicAdd`
+ * `ShaderAtomicFloatFeaturesEXT.shaderSharedFloat32Atomics`
+ * `ShaderAtomicFloatFeaturesEXT.shaderSharedFloat32AtomicAdd`
+ * `ShaderAtomicFloatFeaturesEXT.shaderSharedFloat64Atomics`
+ * `ShaderAtomicFloatFeaturesEXT.shaderSharedFloat64AtomicAdd`
+ * `ShaderAtomicFloatFeaturesEXT.shaderImageFloat32Atomics`
+ * `ShaderAtomicFloatFeaturesEXT.shaderImageFloat32AtomicAdd`
+ * `ShaderAtomicFloatFeaturesEXT.sparseImageFloat32Atomics`
+ * `ShaderAtomicFloatFeaturesEXT.sparseImageFloat32AtomicAdd`
+ * `ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat16Atomics`
+ * `ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat16AtomicAdd`
+ * `ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat16AtomicMinMax`
+ * `ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat32AtomicMinMax`
+ * `ShaderAtomicFloat2FeaturesEXT.shaderBufferFloat64AtomicMinMax`
+ * `ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat16Atomics`
+ * `ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat16AtomicAdd`
+ * `ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat16AtomicMinMax`
+ * `ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat32AtomicMinMax`
+ * `ShaderAtomicFloat2FeaturesEXT.shaderSharedFloat64AtomicMinMax`
+ * `ShaderAtomicFloat2FeaturesEXT.shaderImageFloat32AtomicMinMax`
+ * `ShaderAtomicFloat2FeaturesEXT.sparseImageFloat32AtomicMinMax`
+ * `ShaderImageAtomicInt64FeaturesEXT.shaderImageInt64Atomics`
+ * `ShaderImageAtomicInt64FeaturesEXT.sparseImageInt64Atomics`
+ * `MultiviewFeatures.multiview`
+ * `MultiviewFeatures.multiviewGeometryShader`
+ * `MultiviewFeatures.multiviewTessellationShader`
+ * `TransformFeedbackFeaturesEXT.transformFeedback`
+ * `TransformFeedbackFeaturesEXT.geometryStreams`
+ * `ShaderReplicatedCompositesFeaturesEXT.shaderReplicatedComposites`
+ * `ComputeShaderDerivativesFeaturesKHR.computeDerivativeGroupQuads`
+ * `ComputeShaderDerivativesFeaturesKHR.computeDerivativeGroupLinear`
+ * `ShaderSubgroupRotateFeaturesKHR.shaderSubgroupRotate`
+ * `ShaderSubgroupRotateFeaturesKHR.shaderSubgroupRotateClustered`
+ * `ShaderQuadControlFeaturesKHR.shaderQuadControl`
+ * `FragmentShaderInterlockFeaturesEXT.fragmentShaderSampleInterlock`
+ * `FragmentShaderInterlockFeaturesEXT.fragmentShaderPixelInterlock`
+ * `FragmentShaderInterlockFeaturesEXT.fragmentShaderShadingRateInterlock`
+ * `ShaderImageFootprintFeaturesNV.imageFootprint`
 
 A feature of an extension feature structure (such as `RayQueryFeaturesKHR`,
 `MeshShaderFeaturesEXT` or `DescriptorIndexingFeatures`) also enables the
@@ -1095,6 +1139,32 @@ Ray tracing pipelines allow bind top level acceleration structures.
   # Bind the top level acceleration structure at the given descriptor set and binding.
   BIND ACCELERATION_STRUCTURE {tlas_name} DESCRIPTOR_SET _set_id_ BINDING _id_
 ```
+
+#### Buffer device addresses
+
+Shaders reach buffers through 64-bit device addresses with
+`GL_EXT_buffer_reference` (`PhysicalStorageBuffer` pointers). A pipeline can
+put the device address of a buffer into the data of another buffer:
+
+```groovy
+  # Make |buffer_name| live in the pipeline with a device address and write
+  # that address into the 8 bytes at byte |offset| of |holder_name|.
+  BUFFER_ADDRESS {buffer_name} BUFFER {holder_name} OFFSET _offset_
+```
+
+|buffer_name| needs no descriptor: the pipeline creates it on the device with
+`VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT` (memory allocated with
+`VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT`), copies its data in before each run and
+reads it back after, as for a storage buffer; a buffer the pipeline also binds
+to a descriptor keeps that one device buffer. The address is written each time
+the pipeline sends its buffers to the device, after they are created and before
+their data is copied, so |holder_name| can be a uniform or storage buffer, the
+push constant buffer, another `BUFFER_ADDRESS` buffer (a linked structure, cycles
+included) or any other buffer, whose data then keeps the address of this run.
+Addresses differ between pipelines and runs, and an address is only valid in
+the pipeline that wrote it. |offset| + 8 must not exceed the size of
+|holder_name|, and |buffer_name| must not be empty. The device needs
+`DEVICE_FEATURE BufferDeviceAddressFeatures.bufferDeviceAddress`.
 
 #### OpenCL Plain-Old-Data Arguments
 OpenCL kernels can have plain-old-data (pod or pod_ubo in the desriptor map)

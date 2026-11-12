@@ -69,6 +69,7 @@ class Parser : public amber::Parser {
   Result ParsePipelineFramebufferSize(Pipeline*);
   Result ParsePipelineViewport(Pipeline*);
   Result ParsePipelineBind(Pipeline*);
+  Result ParsePipelineBufferAddress(Pipeline*);
   Result ParsePipelineVertexData(Pipeline*);
   Result ParsePipelineIndexData(Pipeline*);
   Result ParsePipelineSet(Pipeline*);

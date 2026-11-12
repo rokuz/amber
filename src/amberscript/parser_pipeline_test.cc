@@ -794,5 +794,118 @@ END
             r.Error());
 }
 
+TEST_F(AmberScriptParserTest, PipelineBufferAddress) {
+  std::string in = R"(
+SHADER compute my_shader GLSL
+# GLSL Shader
+END
+BUFFER root DATA_TYPE uint32 DATA 0 0 0 0 END
+BUFFER node DATA_TYPE uint32 DATA 1 0 0 0 END
+BUFFER push DATA_TYPE uint32 DATA 0 0 END
+
+PIPELINE compute my_pipeline
+  ATTACH my_shader
+  BIND BUFFER root AS storage DESCRIPTOR_SET 0 BINDING 0
+  BIND BUFFER push AS push_constant
+  BUFFER_ADDRESS node BUFFER root OFFSET 8
+  BUFFER_ADDRESS node BUFFER push OFFSET 0
+  BUFFER_ADDRESS root BUFFER node OFFSET 8
+END
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+
+  auto script = parser.GetScript();
+  const auto& pipelines = script->GetPipelines();
+  ASSERT_EQ(1U, pipelines.size());
+  const auto& addresses = pipelines[0]->GetBufferAddresses();
+  ASSERT_EQ(3U, addresses.size());
+  EXPECT_EQ(script->GetBuffer("node"), addresses[0].buffer);
+  EXPECT_EQ(script->GetBuffer("root"), addresses[0].holder);
+  EXPECT_EQ(8U, addresses[0].offset);
+  EXPECT_EQ(script->GetBuffer("push"), addresses[1].holder);
+  EXPECT_EQ(0U, addresses[1].offset);
+  EXPECT_EQ(script->GetBuffer("root"), addresses[2].buffer);
+  EXPECT_EQ(script->GetBuffer("node"), addresses[2].holder);
+}
+
+TEST_F(AmberScriptParserTest, DerivePipelineKeepsBufferAddresses) {
+  std::string in = R"(
+SHADER compute my_shader GLSL
+# GLSL Shader
+END
+BUFFER root DATA_TYPE uint32 DATA 0 0 0 0 END
+BUFFER node DATA_TYPE uint32 DATA 1 0 0 0 END
+
+PIPELINE compute parent
+  ATTACH my_shader
+  BIND BUFFER root AS storage DESCRIPTOR_SET 0 BINDING 0
+  BUFFER_ADDRESS node BUFFER root OFFSET 0
+END
+DERIVE_PIPELINE child FROM parent
+END
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+
+  auto script = parser.GetScript();
+  const auto& pipelines = script->GetPipelines();
+  ASSERT_EQ(2U, pipelines.size());
+  ASSERT_EQ(1U, pipelines[1]->GetBufferAddresses().size());
+  EXPECT_EQ(0U, pipelines[1]->GetBufferAddresses()[0].offset);
+}
+
+TEST_F(AmberScriptParserTest, PipelineBufferAddressErrors) {
+  struct {
+    const char* command;
+    const char* error;
+  } cases[] = {
+      {"BUFFER_ADDRESS", "12: missing buffer name in BUFFER_ADDRESS command"},
+      {"BUFFER_ADDRESS missing BUFFER root OFFSET 0",
+       "11: unknown buffer: missing"},
+      {"BUFFER_ADDRESS node root OFFSET 0",
+       "11: BUFFER_ADDRESS requires BUFFER"},
+      {"BUFFER_ADDRESS node BUFFER", "12: BUFFER requires a buffer name"},
+      {"BUFFER_ADDRESS node BUFFER missing OFFSET 0",
+       "11: unknown buffer: missing"},
+      {"BUFFER_ADDRESS node BUFFER root 0",
+       "11: BUFFER_ADDRESS requires OFFSET"},
+      {"BUFFER_ADDRESS node BUFFER root OFFSET x",
+       "11: OFFSET expects an integer"},
+      {"BUFFER_ADDRESS node BUFFER root OFFSET 12",
+       "11: buffer address at OFFSET 12 does not fit in buffer root"},
+      {"BUFFER_ADDRESS empty BUFFER root OFFSET 0",
+       "11: buffer empty is empty and has no device address"},
+      {"BUFFER_ADDRESS node BUFFER root OFFSET 0 EXTRA",
+       "11: extra parameters after BUFFER_ADDRESS command: EXTRA"},
+  };
+
+  for (const auto& test : cases) {
+    std::string in = R"(
+SHADER compute my_shader GLSL
+# GLSL Shader
+END
+BUFFER root DATA_TYPE uint32 DATA 0 0 0 0 END
+BUFFER node DATA_TYPE uint32 DATA 1 0 0 0 END
+BUFFER empty DATA_TYPE uint32 SIZE 0 FILL 0
+
+PIPELINE compute my_pipeline
+  ATTACH my_shader
+  )" + std::string(test.command) +
+                     R"(
+END
+)";
+
+    Parser parser;
+    Result r = parser.Parse(in);
+    ASSERT_FALSE(r.IsSuccess()) << test.command;
+    EXPECT_EQ(test.error, r.Error()) << test.command;
+  }
+}
+
 }  // namespace amberscript
 }  // namespace amber

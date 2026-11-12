@@ -83,6 +83,8 @@ const char kSubgroupSupportedOperationsClustered[] =
     "SubgroupSupportedOperations.clustered";
 const char kSubgroupSupportedOperationsQuad[] =
     "SubgroupSupportedOperations.quad";
+const char kSubgroupSupportedOperationsPartitionedNV[] =
+    "SubgroupSupportedOperations.partitionedNV";
 const char kSubgroupSupportedStages[] = "SubgroupSupportedStages";
 const char kSubgroupSupportedStagesVertex[] = "SubgroupSupportedStages.vertex";
 const char kSubgroupSupportedStagesTessellationControl[] =
@@ -1210,6 +1212,12 @@ Result Device::Initialize(
         if (feature == kSubgroupSupportedOperationsQuad &&
             !(subgroup_supported_operations & VK_SUBGROUP_FEATURE_QUAD_BIT)) {
           return amber::Result("Missing subgroup operation quad feature");
+        }
+        if (feature == kSubgroupSupportedOperationsPartitionedNV &&
+            !(subgroup_supported_operations &
+              VK_SUBGROUP_FEATURE_PARTITIONED_BIT_NV)) {
+          return amber::Result(
+              "Missing subgroup operation partitioned (NV) feature");
         }
       }
     }

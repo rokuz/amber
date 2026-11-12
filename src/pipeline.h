@@ -227,6 +227,16 @@ class Pipeline {
     uint32_t descriptor_set = 0;
     uint32_t binding = 0;
   };
+
+  /// Information on a device address written into a buffer by the pipeline.
+  struct BufferAddressInfo {
+    /// The buffer whose device address is written.
+    Buffer* buffer = nullptr;
+    /// The buffer that receives the address.
+    Buffer* holder = nullptr;
+    /// The byte offset of the address in |holder|.
+    uint32_t offset = 0;
+  };
   static const char* kGeneratedColorBuffer;
   static const char* kGeneratedDepthBuffer;
   static const char* kGeneratedPushConstantBuffer;
@@ -421,6 +431,16 @@ class Pipeline {
   /// Returns information on all bound TLAS in the pipeline.
   std::vector<TLASInfo>& GetTLASes() { return tlases_; }
 
+  /// Makes |buffer| a device address buffer of the pipeline and writes its
+  /// device address into |holder| at byte |offset| before the pipeline's
+  /// buffers are sent to the device.
+  Result AddBufferAddress(Buffer* buffer, Buffer* holder, uint32_t offset);
+
+  /// Returns the device addresses the pipeline writes into buffers.
+  const std::vector<BufferAddressInfo>& GetBufferAddresses() const {
+    return buffer_addresses_;
+  }
+
   /// Adds |sbt| to the list of known shader binding tables.
   /// The |sbt| must have a unique name within pipeline.
   Result AddSBT(std::unique_ptr<SBT> sbt) {
@@ -575,6 +595,7 @@ class Pipeline {
   std::string name_;
   std::vector<ShaderInfo> shaders_;
   std::vector<TLASInfo> tlases_;
+  std::vector<BufferAddressInfo> buffer_addresses_;
   std::vector<BufferInfo> color_attachments_;
   std::vector<BufferInfo> resolve_targets_;
   std::vector<BufferInfo> vertex_buffers_;

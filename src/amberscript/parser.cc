@@ -729,6 +729,8 @@ Result Parser::ParsePipelineBody(const std::string& cmd_name,
       r = ParsePipelineViewport(pipeline.get());
     } else if (tok == "BIND") {
       r = ParsePipelineBind(pipeline.get());
+    } else if (tok == "BUFFER_ADDRESS") {
+      r = ParsePipelineBufferAddress(pipeline.get());
     } else if (tok == "VERTEX_DATA") {
       r = ParsePipelineVertexData(pipeline.get());
     } else if (tok == "INDEX_DATA") {
@@ -1299,6 +1301,45 @@ Result Parser::ToBufferType(const std::string& name, BufferType* type) {
   }
 
   return {};
+}
+
+Result Parser::ParsePipelineBufferAddress(Pipeline* pipeline) {
+  auto token = tokenizer_->NextToken();
+  if (!token->IsIdentifier()) {
+    return Result("missing buffer name in BUFFER_ADDRESS command");
+  }
+  Buffer* buffer = script_->GetBuffer(token->AsString());
+  if (buffer == nullptr) {
+    return Result("unknown buffer: " + token->AsString());
+  }
+
+  token = tokenizer_->NextToken();
+  if (!token->IsIdentifier() || token->AsString() != "BUFFER") {
+    return Result("BUFFER_ADDRESS requires BUFFER");
+  }
+  token = tokenizer_->NextToken();
+  if (!token->IsIdentifier()) {
+    return Result("BUFFER requires a buffer name");
+  }
+  Buffer* holder = script_->GetBuffer(token->AsString());
+  if (holder == nullptr) {
+    return Result("unknown buffer: " + token->AsString());
+  }
+
+  token = tokenizer_->NextToken();
+  if (!token->IsIdentifier() || token->AsString() != "OFFSET") {
+    return Result("BUFFER_ADDRESS requires OFFSET");
+  }
+  token = tokenizer_->NextToken();
+  if (!token->IsInteger()) {
+    return Result("OFFSET expects an integer");
+  }
+  Result r = pipeline->AddBufferAddress(buffer, holder, token->AsUint32());
+  if (!r.IsSuccess()) {
+    return r;
+  }
+
+  return ValidateEndOfStatement("BUFFER_ADDRESS command");
 }
 
 Result Parser::ParsePipelineBind(Pipeline* pipeline) {
