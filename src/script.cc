@@ -289,7 +289,23 @@ bool Script::IsKnownFeature(const std::string& name) const {
          name == "ComputeShaderDerivativesPropertiesKHR."
                  "meshAndTaskShaderDerivatives" ||
          name == "SubgroupSupportedOperations.partitionedNV" ||
-         name == "ShaderLongVectorFeaturesEXT.longVector";
+         name == "ShaderLongVectorFeaturesEXT.longVector" ||
+         name == "CooperativeMatrixFeaturesNV.cooperativeMatrix" ||
+         name == "CooperativeMatrixFeaturesNV.cooperativeMatrixRobustBufferAccess" ||
+         name == "CooperativeMatrix2FeaturesNV.cooperativeMatrixWorkgroupScope" ||
+         name == "CooperativeMatrix2FeaturesNV.cooperativeMatrixFlexibleDimensions" ||
+         name == "CooperativeMatrix2FeaturesNV.cooperativeMatrixReductions" ||
+         name == "CooperativeMatrix2FeaturesNV.cooperativeMatrixConversions" ||
+         name == "CooperativeMatrix2FeaturesNV.cooperativeMatrixPerElementOperations" ||
+         name == "CooperativeMatrix2FeaturesNV.cooperativeMatrixTensorAddressing" ||
+         name == "CooperativeMatrix2FeaturesNV.cooperativeMatrixBlockLoads" ||
+         name == "CooperativeVectorFeaturesNV.cooperativeVector" ||
+         name == "CooperativeVectorFeaturesNV.cooperativeVectorTraining" ||
+         name == "ShaderBfloat16FeaturesKHR.shaderBFloat16Type" ||
+         name == "ShaderBfloat16FeaturesKHR.shaderBFloat16DotProduct" ||
+         name == "ShaderBfloat16FeaturesKHR.shaderBFloat16CooperativeMatrix" ||
+         name == "ShaderFloat8FeaturesEXT.shaderFloat8" ||
+         name == "ShaderFloat8FeaturesEXT.shaderFloat8CooperativeMatrix";
 }
 
 bool Script::IsKnownProperty(const std::string& name) const {

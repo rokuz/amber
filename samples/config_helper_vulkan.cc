@@ -112,6 +112,63 @@ struct FeatureStructInfo {
 
 const std::vector<FeatureStructInfo>& KnownFeatureStructs() {
   static const std::vector<FeatureStructInfo> kStructs = {
+      {"CooperativeMatrixFeaturesNV",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_NV,
+       VK_NV_COOPERATIVE_MATRIX_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceCooperativeMatrixFeaturesNV),
+       false,
+       {AMBER_FEATURE_FIELD(VkPhysicalDeviceCooperativeMatrixFeaturesNV,
+                            cooperativeMatrix),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceCooperativeMatrixFeaturesNV,
+                            cooperativeMatrixRobustBufferAccess)}},
+      {"CooperativeMatrix2FeaturesNV",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_2_FEATURES_NV,
+       VK_NV_COOPERATIVE_MATRIX_2_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceCooperativeMatrix2FeaturesNV),
+       false,
+       {AMBER_FEATURE_FIELD(VkPhysicalDeviceCooperativeMatrix2FeaturesNV,
+                            cooperativeMatrixWorkgroupScope),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceCooperativeMatrix2FeaturesNV,
+                            cooperativeMatrixFlexibleDimensions),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceCooperativeMatrix2FeaturesNV,
+                            cooperativeMatrixReductions),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceCooperativeMatrix2FeaturesNV,
+                            cooperativeMatrixConversions),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceCooperativeMatrix2FeaturesNV,
+                            cooperativeMatrixPerElementOperations),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceCooperativeMatrix2FeaturesNV,
+                            cooperativeMatrixTensorAddressing),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceCooperativeMatrix2FeaturesNV,
+                            cooperativeMatrixBlockLoads)}},
+      {"CooperativeVectorFeaturesNV",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV,
+       VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceCooperativeVectorFeaturesNV),
+       false,
+       {AMBER_FEATURE_FIELD(VkPhysicalDeviceCooperativeVectorFeaturesNV,
+                            cooperativeVector),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceCooperativeVectorFeaturesNV,
+                            cooperativeVectorTraining)}},
+      {"ShaderBfloat16FeaturesKHR",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_BFLOAT16_FEATURES_KHR,
+       VK_KHR_SHADER_BFLOAT16_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceShaderBfloat16FeaturesKHR),
+       false,
+       {AMBER_FEATURE_FIELD(VkPhysicalDeviceShaderBfloat16FeaturesKHR,
+                            shaderBFloat16Type),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceShaderBfloat16FeaturesKHR,
+                            shaderBFloat16DotProduct),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceShaderBfloat16FeaturesKHR,
+                            shaderBFloat16CooperativeMatrix)}},
+      {"ShaderFloat8FeaturesEXT",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT8_FEATURES_EXT,
+       VK_EXT_SHADER_FLOAT8_EXTENSION_NAME,
+       sizeof(VkPhysicalDeviceShaderFloat8FeaturesEXT),
+       false,
+       {AMBER_FEATURE_FIELD(VkPhysicalDeviceShaderFloat8FeaturesEXT,
+                            shaderFloat8),
+        AMBER_FEATURE_FIELD(VkPhysicalDeviceShaderFloat8FeaturesEXT,
+                            shaderFloat8CooperativeMatrix)}},
       {"RayQueryFeaturesKHR",
        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR,
        VK_KHR_RAY_QUERY_EXTENSION_NAME,
@@ -2116,6 +2173,127 @@ void ConfigHelperVulkan::DumpPhysicalDeviceInfo() {
                     << " C=" << m.CType << " Result=" << m.ResultType
                     << " saturating=" << m.saturatingAccumulation
                     << " scope=" << m.scope << std::endl;
+        }
+      }
+    }
+  }
+  const auto has_extension = [this](const char* name) {
+    return std::find(vk_.available_device_extensions.begin(),
+                     vk_.available_device_extensions.end(),
+                     name) != vk_.available_device_extensions.end();
+  };
+  auto get_properties2 = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties2>(
+      vkGetInstanceProcAddr(vk_.instance, "vkGetPhysicalDeviceProperties2"));
+  if (has_extension(VK_NV_COOPERATIVE_MATRIX_EXTENSION_NAME)) {
+    auto get_properties =
+        reinterpret_cast<PFN_vkGetPhysicalDeviceCooperativeMatrixPropertiesNV>(
+            vkGetInstanceProcAddr(
+                vk_.instance,
+                "vkGetPhysicalDeviceCooperativeMatrixPropertiesNV"));
+    if (get_properties) {
+      uint32_t count = 0;
+      get_properties(vk_.physical_device, &count, nullptr);
+      VkCooperativeMatrixPropertiesNV empty{};
+      empty.sType = VK_STRUCTURE_TYPE_COOPERATIVE_MATRIX_PROPERTIES_NV;
+      std::vector<VkCooperativeMatrixPropertiesNV> matrices(count, empty);
+      if (count > 0 && get_properties(vk_.physical_device, &count,
+                                      matrices.data()) == VK_SUCCESS) {
+        for (const auto& m : matrices) {
+          std::cout << "  cooperativeMatrixNV: M=" << m.MSize
+                    << " N=" << m.NSize << " K=" << m.KSize
+                    << " A=" << m.AType << " B=" << m.BType
+                    << " C=" << m.CType << " Result=" << m.DType
+                    << " scope=" << m.scope << std::endl;
+        }
+      }
+    }
+  }
+  if (has_extension(VK_NV_COOPERATIVE_MATRIX_2_EXTENSION_NAME)) {
+    if (get_properties2) {
+      VkPhysicalDeviceCooperativeMatrix2PropertiesNV matrix2{};
+      matrix2.sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_2_PROPERTIES_NV;
+      VkPhysicalDeviceProperties2 properties2{};
+      properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+      properties2.pNext = &matrix2;
+      get_properties2(vk_.physical_device, &properties2);
+      std::cout << "  cooperativeMatrixWorkgroupScopeMaxWorkgroupSize: "
+                << matrix2.cooperativeMatrixWorkgroupScopeMaxWorkgroupSize
+                << std::endl;
+      std::cout << "  cooperativeMatrixFlexibleDimensionsMaxDimension: "
+                << matrix2.cooperativeMatrixFlexibleDimensionsMaxDimension
+                << std::endl;
+      std::cout << "  cooperativeMatrixWorkgroupScopeReservedSharedMemory: "
+                << matrix2.cooperativeMatrixWorkgroupScopeReservedSharedMemory
+                << std::endl;
+    }
+    auto get_flexible = reinterpret_cast<
+        PFN_vkGetPhysicalDeviceCooperativeMatrixFlexibleDimensionsPropertiesNV>(
+        vkGetInstanceProcAddr(vk_.instance,
+                              "vkGetPhysicalDeviceCooperativeMatrixFlexible"
+                              "DimensionsPropertiesNV"));
+    if (get_flexible) {
+      uint32_t count = 0;
+      get_flexible(vk_.physical_device, &count, nullptr);
+      VkCooperativeMatrixFlexibleDimensionsPropertiesNV empty{};
+      empty.sType =
+          VK_STRUCTURE_TYPE_COOPERATIVE_MATRIX_FLEXIBLE_DIMENSIONS_PROPERTIES_NV;
+      std::vector<VkCooperativeMatrixFlexibleDimensionsPropertiesNV> matrices(
+          count, empty);
+      if (count > 0 && get_flexible(vk_.physical_device, &count,
+                                    matrices.data()) == VK_SUCCESS) {
+        for (const auto& m : matrices) {
+          std::cout << "  cooperativeMatrixFlexible: M=" << m.MGranularity
+                    << " N=" << m.NGranularity << " K=" << m.KGranularity
+                    << " A=" << m.AType << " B=" << m.BType
+                    << " C=" << m.CType << " Result=" << m.ResultType
+                    << " saturating=" << m.saturatingAccumulation
+                    << " scope=" << m.scope
+                    << " invocations=" << m.workgroupInvocations << std::endl;
+        }
+      }
+    }
+  }
+  if (has_extension(VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME)) {
+    if (get_properties2) {
+      VkPhysicalDeviceCooperativeVectorPropertiesNV vector{};
+      vector.sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_PROPERTIES_NV;
+      VkPhysicalDeviceProperties2 properties2{};
+      properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+      properties2.pNext = &vector;
+      get_properties2(vk_.physical_device, &properties2);
+      std::cout << "  cooperativeVectorSupportedStages: "
+                << vector.cooperativeVectorSupportedStages << std::endl;
+      std::cout << "  cooperativeVectorTrainingFloat16Accumulation: "
+                << vector.cooperativeVectorTrainingFloat16Accumulation
+                << std::endl;
+      std::cout << "  cooperativeVectorTrainingFloat32Accumulation: "
+                << vector.cooperativeVectorTrainingFloat32Accumulation
+                << std::endl;
+      std::cout << "  maxCooperativeVectorComponents: "
+                << vector.maxCooperativeVectorComponents << std::endl;
+    }
+    auto get_vectors =
+        reinterpret_cast<PFN_vkGetPhysicalDeviceCooperativeVectorPropertiesNV>(
+            vkGetInstanceProcAddr(
+                vk_.instance,
+                "vkGetPhysicalDeviceCooperativeVectorPropertiesNV"));
+    if (get_vectors) {
+      uint32_t count = 0;
+      get_vectors(vk_.physical_device, &count, nullptr);
+      VkCooperativeVectorPropertiesNV empty{};
+      empty.sType = VK_STRUCTURE_TYPE_COOPERATIVE_VECTOR_PROPERTIES_NV;
+      std::vector<VkCooperativeVectorPropertiesNV> vectors(count, empty);
+      if (count > 0 && get_vectors(vk_.physical_device, &count,
+                                   vectors.data()) == VK_SUCCESS) {
+        for (const auto& v : vectors) {
+          std::cout << "  cooperativeVector: input=" << v.inputType
+                    << " inputInterpretation=" << v.inputInterpretation
+                    << " matrix=" << v.matrixInterpretation
+                    << " bias=" << v.biasInterpretation
+                    << " result=" << v.resultType
+                    << " transpose=" << v.transpose << std::endl;
         }
       }
     }
