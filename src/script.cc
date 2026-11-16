@@ -312,6 +312,21 @@ bool Script::IsKnownFeature(const std::string& name) const {
              "FragmentShaderBarycentricFeaturesKHR."
              "fragmentShaderBarycentric" ||
          name ==
+             "WorkgroupMemoryExplicitLayoutFeaturesKHR."
+             "workgroupMemoryExplicitLayout" ||
+         name ==
+             "WorkgroupMemoryExplicitLayoutFeaturesKHR."
+             "workgroupMemoryExplicitLayoutScalarBlockLayout" ||
+         name ==
+             "WorkgroupMemoryExplicitLayoutFeaturesKHR."
+             "workgroupMemoryExplicitLayout8BitAccess" ||
+         name ==
+             "WorkgroupMemoryExplicitLayoutFeaturesKHR."
+             "workgroupMemoryExplicitLayout16BitAccess" ||
+         name ==
+             "ShaderUniformBufferUnsizedArrayFeaturesEXT."
+             "shaderUniformBufferUnsizedArray" ||
+         name ==
              "CooperativeMatrixDecodeVectorFeaturesNV."
              "cooperativeMatrixDecodeVector" ||
          name ==

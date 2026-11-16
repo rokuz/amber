@@ -167,6 +167,11 @@ with:
  * `FragmentDensityMapFeaturesEXT.fragmentDensityMap`
  * `ShadingRateImageFeaturesNV.shadingRateImage`
  * `FragmentShaderBarycentricFeaturesKHR.fragmentShaderBarycentric`
+ * `WorkgroupMemoryExplicitLayoutFeaturesKHR.workgroupMemoryExplicitLayout`
+ * `WorkgroupMemoryExplicitLayoutFeaturesKHR.workgroupMemoryExplicitLayoutScalarBlockLayout`
+ * `WorkgroupMemoryExplicitLayoutFeaturesKHR.workgroupMemoryExplicitLayout8BitAccess`
+ * `WorkgroupMemoryExplicitLayoutFeaturesKHR.workgroupMemoryExplicitLayout16BitAccess`
+ * `ShaderUniformBufferUnsizedArrayFeaturesEXT.shaderUniformBufferUnsizedArray`
  * `CooperativeMatrixDecodeVectorFeaturesNV.cooperativeMatrixDecodeVector`
  * `CooperativeMatrixMaintenance1FeaturesEXT.cooperativeMatrixProperties2`
  * `CooperativeMatrixMaintenance1FeaturesEXT.cooperativeMatrixReductions`
