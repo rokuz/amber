@@ -16,6 +16,7 @@
 #ifndef SRC_VULKAN_PIPELINE_H_
 #define SRC_VULKAN_PIPELINE_H_
 
+#include <chrono>  // NOLINT(build/c++11)
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -82,6 +83,10 @@ class Pipeline {
     entry_points_[stage] = entry;
   }
 
+  /// Sets the name of the pipeline in the script, used to report its
+  /// statistics.
+  void SetName(const std::string& name) { name_ = name; }
+
   CommandBuffer* GetCommandBuffer() const { return command_.get(); }
   Device* GetDevice() const { return device_; }
   virtual BlasesMap* GetBlases() { return nullptr; }
@@ -116,6 +121,14 @@ class Pipeline {
   void DestroyTimingQueryObjectIfNeeded();
   void BeginTimerQuery();
   void EndTimerQuery();
+
+  /// Returns the create flags which capture the statistics of the pipeline
+  /// when they are reported.
+  VkPipelineCreateFlags GetStatisticsCreateFlags() const;
+  /// Reports the statistics of |pipeline|, created with the flags of
+  /// GetStatisticsCreateFlags(), whose creation started at |start|.
+  void ReportStatistics(VkPipeline pipeline,
+                        std::chrono::steady_clock::time_point start) const;
 
   Result SendDescriptorDataToDeviceIfNeeded();
 
@@ -204,6 +217,7 @@ class Pipeline {
 
   std::unique_ptr<PushConstant> push_constant_;
   bool in_timed_execution_ = false;
+  std::string name_;
 };
 
 }  // namespace vulkan

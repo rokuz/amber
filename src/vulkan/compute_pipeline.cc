@@ -64,12 +64,15 @@ Result ComputePipeline::CreateVkComputePipeline(
   pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
   pipeline_info.stage = shader_stage_info[0];
   pipeline_info.layout = pipeline_layout;
+  pipeline_info.flags = GetStatisticsCreateFlags();
 
+  const auto start = std::chrono::steady_clock::now();
   if (device_->GetPtrs()->vkCreateComputePipelines(
           device_->GetVkDevice(), VK_NULL_HANDLE, 1, &pipeline_info, nullptr,
           pipeline) != VK_SUCCESS) {
     return Result("Vulkan::Calling vkCreateComputePipelines Fail");
   }
+  ReportStatistics(*pipeline, start);
 
   return {};
 }

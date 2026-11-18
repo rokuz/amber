@@ -44,6 +44,7 @@ class ConfigHelperImpl {
       bool enable_pipeline_runtime_layer,
       const std::string& layer_library,
       bool show_version_info,
+      bool pipeline_statistics,
       std::unique_ptr<amber::EngineConfig>* config) = 0;
 };
 
@@ -71,6 +72,7 @@ class ConfigHelper {
       bool enable_pipeline_runtime_layer,
       const std::string& layer_library,
       bool show_version_info,
+      bool pipeline_statistics,
       std::unique_ptr<amber::EngineConfig>* config);
 
  private:

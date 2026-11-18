@@ -274,6 +274,36 @@ void Pipeline::UpdateDescriptorSetsIfNeeded() {
   }
 }
 
+VkPipelineCreateFlags Pipeline::GetStatisticsCreateFlags() const {
+  if ((create_flags_ & VK_PIPELINE_CREATE_LIBRARY_BIT_KHR) != 0) {
+    return 0;
+  }
+  return device_->GetPipelineStatisticsCreateFlags();
+}
+
+void Pipeline::ReportStatistics(
+    VkPipeline pipeline,
+    std::chrono::steady_clock::time_point start) const {
+  if (!device_->IsCapturingPipelineStatistics() ||
+      (create_flags_ & VK_PIPELINE_CREATE_LIBRARY_BIT_KHR) != 0) {
+    return;
+  }
+  const std::chrono::duration<double, std::milli> elapsed =
+      std::chrono::steady_clock::now() - start;
+  std::string type = "graphics";
+  if (IsCompute()) {
+    type = "compute";
+  } else if (IsRayTracing()) {
+    type = "raytracing";
+  }
+  std::vector<VkShaderStageFlagBits> stages;
+  for (const auto& info : shader_stage_info_) {
+    stages.push_back(info.stage);
+  }
+  device_->ReportPipelineStatistics(name_, type, pipeline, stages,
+                                    elapsed.count());
+}
+
 void Pipeline::CreateTimingQueryObjectIfNeeded(bool is_timed_execution) {
   if (!is_timed_execution ||
       !device_->IsTimestampComputeAndGraphicsSupported()) {

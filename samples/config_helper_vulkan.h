@@ -54,6 +54,7 @@ class ConfigHelperVulkan : public ConfigHelperImpl {
       bool enable_pipeline_runtime_layer,
       const std::string& layer_library,
       bool show_version_info,
+      bool pipeline_statistics,
       std::unique_ptr<amber::EngineConfig>* config) override;
 
  private:
@@ -137,7 +138,11 @@ class ConfigHelperVulkan : public ConfigHelperImpl {
     bool vulkan_memory_model = false;
     bool zero_initialize_workgroup_memory = false;
     bool shader_long_vector = false;
+    bool pipeline_executable_info = false;
+    bool shader_info_amd = false;
   } supports_;
+
+  bool pipeline_statistics_ = false;
 
   struct {
     VkPhysicalDeviceFeatures device{};

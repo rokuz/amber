@@ -161,6 +161,8 @@ Result EngineVulkan::Initialize(
   if (!r.IsSuccess()) {
     return r;
   }
+  device_->SetPipelineStatisticsSupport(vk_config->pipeline_executable_info,
+                                        vk_config->shader_info_amd);
 
   if (!pool_) {
     pool_ = std::make_unique<CommandPool>(device_.get());
@@ -255,6 +257,7 @@ Result EngineVulkan::CreatePipeline(amber::Pipeline* pipeline) {
   }
 
   info.vk_pipeline = std::move(vk_pipeline);
+  info.vk_pipeline->SetName(pipeline->GetName());
 
   // Set the entry point names for the pipeline.
   for (const auto& shader_info : pipeline->GetShaders()) {

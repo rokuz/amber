@@ -269,6 +269,8 @@ const char kBufferDeviceAddress[] =
     "BufferDeviceAddressFeatures.bufferDeviceAddress";
 const char kRayTracingPipeline[] =
     "RayTracingPipelineFeaturesKHR.rayTracingPipeline";
+const char kPipelineExecutableInfo[] =
+    "PipelineExecutablePropertiesFeaturesKHR.pipelineExecutableInfo";
 const char kRayTraversalPrimitiveCulling[] =
     "RayTracingPipelineFeaturesKHR.rayTraversalPrimitiveCulling";
 
@@ -733,6 +735,14 @@ const std::vector<FeatureStructInfo>& KnownFeatureStructs() {
        {AMBER_FEATURE_FIELD(
            VkPhysicalDeviceShaderSubgroupUniformControlFlowFeaturesKHR,
            shaderSubgroupUniformControlFlow)}},
+      {"PipelineExecutablePropertiesFeaturesKHR",
+       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_EXECUTABLE_PROPERTIES_FEATURES_KHR,
+       VK_KHR_PIPELINE_EXECUTABLE_PROPERTIES_EXTENSION_NAME,
+       sizeof(VkPhysicalDevicePipelineExecutablePropertiesFeaturesKHR),
+       false,
+       {AMBER_FEATURE_FIELD(
+           VkPhysicalDevicePipelineExecutablePropertiesFeaturesKHR,
+           pipelineExecutableInfo)}},
       {"ShaderEarlyAndLateFragmentTestsFeaturesAMD",
        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_EARLY_AND_LATE_FRAGMENT_TESTS_FEATURES_AMD,
        VK_AMD_SHADER_EARLY_AND_LATE_FRAGMENT_TESTS_EXTENSION_NAME,
@@ -1649,6 +1659,11 @@ amber::Result ConfigHelperVulkan::CheckVulkanPhysicalDeviceRequirements(
                                  required_extensions)) {
     return amber::Result("Device does not support all required extensions");
   }
+  supports_.pipeline_executable_info = false;
+  supports_.shader_info_amd = std::find(vk_.available_device_extensions.begin(),
+                                        vk_.available_device_extensions.end(),
+                                        VK_AMD_SHADER_INFO_EXTENSION_NAME) !=
+                              vk_.available_device_extensions.end();
   for (const auto& ext : vk_.available_device_extensions) {
     if (ext == VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME) {
       supports_.shader_float16_int8 = true;
@@ -1845,6 +1860,16 @@ amber::Result ConfigHelperVulkan::CheckVulkanPhysicalDeviceRequirements(
     if (supports_.cooperative_matrix) {
       supports_.cooperative_matrix =
           cooperative_matrix_features.cooperativeMatrix;
+    }
+    size_t executable_info_offset = 0;
+    const FeatureStructInfo* executable_info =
+        FindFeatureStruct(kPipelineExecutableInfo, &executable_info_offset);
+    for (size_t i = 0; i < extension_feature_infos.size(); ++i) {
+      if (extension_feature_infos[i] == executable_info) {
+        supports_.pipeline_executable_info =
+            GetFeatureField(extension_features[i], executable_info_offset) ==
+            VK_TRUE;
+      }
     }
 
     std::vector<std::string> required_features1;
@@ -2289,6 +2314,21 @@ amber::Result ConfigHelperVulkan::CreateDeviceWithFeatures2(
       }
     }
   }
+  if (pipeline_statistics_ && supports_.pipeline_executable_info) {
+    size_t offset = 0;
+    const FeatureStructInfo* info =
+        FindFeatureStruct(kPipelineExecutableInfo, &offset);
+    if (info != nullptr) {
+      SetFeatureField(EnableFeatureStruct(*info, &extension_feature_types_,
+                                          &extension_features_, &exts),
+                      offset);
+    }
+  }
+  if (pipeline_statistics_ && supports_.shader_info_amd &&
+      std::find(exts.begin(), exts.end(), VK_AMD_SHADER_INFO_EXTENSION_NAME) ==
+          exts.end()) {
+    exts.push_back(VK_AMD_SHADER_INFO_EXTENSION_NAME);
+  }
   for (const auto& info : KnownFeatureStructs()) {
     if (info.always_enabled &&
         std::find(vk_.available_device_extensions.begin(),
@@ -2655,7 +2695,9 @@ amber::Result ConfigHelperVulkan::CreateConfig(
     bool enable_pipeline_runtime_layer,
     const std::string& layer_library,
     bool show_version_info,
+    bool pipeline_statistics,
     std::unique_ptr<amber::EngineConfig>* cfg_holder) {
+  pipeline_statistics_ = pipeline_statistics;
   if (!layer_library.empty()) {
     amber::Result loaded = LoadLayerLibrary(layer_library);
     if (!loaded.IsSuccess()) {
@@ -2706,6 +2748,12 @@ amber::Result ConfigHelperVulkan::CreateConfig(
   config->queue_family_index = vk_.queue_family_index;
   config->queue = vk_.queue;
   config->device = vk_.device;
+  config->pipeline_executable_info =
+      pipeline_statistics_ && supports_.get_physical_device_properties2 &&
+      supports_.pipeline_executable_info;
+  config->shader_info_amd = pipeline_statistics_ &&
+                            supports_.get_physical_device_properties2 &&
+                            supports_.shader_info_amd;
   config->vkGetInstanceProcAddr = Chain().get_instance_proc_addr
                                       ? ChainGetInstanceProcAddr
                                       : vkGetInstanceProcAddr;

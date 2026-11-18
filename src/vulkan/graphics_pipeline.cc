@@ -834,12 +834,15 @@ Result GraphicsPipeline::CreateVkGraphicsPipeline(
   pipeline_info.layout = pipeline_layout;
   pipeline_info.renderPass = render_pass_;
   pipeline_info.subpass = 0;
+  pipeline_info.flags = GetStatisticsCreateFlags();
 
+  const auto start = std::chrono::steady_clock::now();
   if (device_->GetPtrs()->vkCreateGraphicsPipelines(
           device_->GetVkDevice(), VK_NULL_HANDLE, 1, &pipeline_info, nullptr,
           pipeline) != VK_SUCCESS) {
     return Result("Vulkan::Calling vkCreateGraphicsPipelines Fail");
   }
+  ReportStatistics(*pipeline, start);
 
   return {};
 }

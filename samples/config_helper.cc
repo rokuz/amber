@@ -47,6 +47,7 @@ amber::Result ConfigHelper::CreateConfig(
     bool enable_pipeline_runtime_layer,
     const std::string& layer_library,
     bool show_version_info,
+    bool pipeline_statistics,
     std::unique_ptr<amber::EngineConfig>* config) {
   switch (engine) {
     case amber::kEngineTypeVulkan:
@@ -73,7 +74,8 @@ amber::Result ConfigHelper::CreateConfig(
       engine_major, engine_minor, selected_device, selected_device_name,
       required_features, required_instance_extensions,
       required_device_extensions, disable_validation_layer,
-      enable_pipeline_runtime_layer, layer_library, show_version_info, config);
+      enable_pipeline_runtime_layer, layer_library, show_version_info,
+      pipeline_statistics, config);
 }
 
 }  // namespace sample

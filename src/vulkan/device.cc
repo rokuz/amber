@@ -23,6 +23,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 // The VK_HEADER_VERSION increases monotonically, even through
@@ -503,6 +504,98 @@ bool AreAllExtensionsSupported(
   return required_extension_set.empty();
 }
 
+const char kPipelineExecutableProperties[] =
+    "VK_KHR_pipeline_executable_properties";
+const char kShaderInfoAMD[] = "VK_AMD_shader_info";
+
+std::string ShaderStageName(VkShaderStageFlagBits stage) {
+  switch (stage) {
+    case VK_SHADER_STAGE_VERTEX_BIT:
+      return "vertex";
+    case VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT:
+      return "tessellation_control";
+    case VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT:
+      return "tessellation_evaluation";
+    case VK_SHADER_STAGE_GEOMETRY_BIT:
+      return "geometry";
+    case VK_SHADER_STAGE_FRAGMENT_BIT:
+      return "fragment";
+    case VK_SHADER_STAGE_COMPUTE_BIT:
+      return "compute";
+    case VK_SHADER_STAGE_TASK_BIT_EXT:
+      return "task";
+    case VK_SHADER_STAGE_MESH_BIT_EXT:
+      return "mesh";
+    case VK_SHADER_STAGE_RAYGEN_BIT_KHR:
+      return "ray_generation";
+    case VK_SHADER_STAGE_ANY_HIT_BIT_KHR:
+      return "any_hit";
+    case VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR:
+      return "closest_hit";
+    case VK_SHADER_STAGE_MISS_BIT_KHR:
+      return "miss";
+    case VK_SHADER_STAGE_INTERSECTION_BIT_KHR:
+      return "intersection";
+    case VK_SHADER_STAGE_CALLABLE_BIT_KHR:
+      return "callable";
+    default:
+      break;
+  }
+  return "unknown";
+}
+
+std::vector<std::string> ShaderStageNames(VkShaderStageFlags stages) {
+  std::vector<std::string> names;
+  for (uint32_t bit = 0; bit < 32; ++bit) {
+    const VkShaderStageFlags flag = VkShaderStageFlags(1) << bit;
+    if ((stages & flag) != 0) {
+      names.push_back(
+          ShaderStageName(static_cast<VkShaderStageFlagBits>(flag)));
+    }
+  }
+  return names;
+}
+
+PipelineStatistic MakeStatistic(const std::string& name,
+                                const std::string& description,
+                                const std::string& format,
+                                const std::string& value) {
+  PipelineStatistic statistic;
+  statistic.name = name;
+  statistic.description = description;
+  statistic.format = format;
+  statistic.value = value;
+  return statistic;
+}
+
+PipelineStatistic ToPipelineStatistic(
+    const VkPipelineExecutableStatisticKHR& statistic) {
+  std::ostringstream value;
+  std::string format = "unknown";
+  switch (statistic.format) {
+    case VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_BOOL32_KHR:
+      format = "bool32";
+      value << (statistic.value.b32 == VK_TRUE ? "true" : "false");
+      break;
+    case VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_INT64_KHR:
+      format = "int64";
+      value << statistic.value.i64;
+      break;
+    case VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_UINT64_KHR:
+      format = "uint64";
+      value << statistic.value.u64;
+      break;
+    case VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_FLOAT64_KHR:
+      format = "float64";
+      value << std::setprecision(17) << statistic.value.f64;
+      break;
+    default:
+      break;
+  }
+  return MakeStatistic(statistic.name, statistic.description, format,
+                       value.str());
+}
+
 }  // namespace
 
 std::string VkResultName(VkResult result) {
@@ -575,6 +668,203 @@ void Device::ReportExecutionTiming(double time_in_ms) {
   if (delegate_) {
     delegate_->ReportExecutionTiming(time_in_ms);
   }
+}
+
+bool Device::IsCapturingPipelineStatistics() const {
+  return delegate_ && delegate_->CapturePipelineStatistics();
+}
+
+VkPipelineCreateFlags Device::GetPipelineStatisticsCreateFlags() const {
+  if (!IsCapturingPipelineStatistics() || !pipeline_executable_info_ ||
+      ptrs_.vkGetPipelineExecutablePropertiesKHR == nullptr) {
+    return 0;
+  }
+  VkPipelineCreateFlags flags = VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR;
+  if (delegate_->CapturePipelineInternalRepresentations()) {
+    flags |= VK_PIPELINE_CREATE_CAPTURE_INTERNAL_REPRESENTATIONS_BIT_KHR;
+  }
+  return flags;
+}
+
+void Device::AddPipelineExecutableStatistics(VkPipeline pipeline,
+                                             PipelineStatistics* report) const {
+  VkPipelineInfoKHR pipeline_info = {};
+  pipeline_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INFO_KHR;
+  pipeline_info.pipeline = pipeline;
+
+  uint32_t executable_count = 0;
+  if (ptrs_.vkGetPipelineExecutablePropertiesKHR(
+          device_, &pipeline_info, &executable_count, nullptr) != VK_SUCCESS) {
+    return;
+  }
+  std::vector<VkPipelineExecutablePropertiesKHR> properties(executable_count);
+  for (auto& property : properties) {
+    property.sType = VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_PROPERTIES_KHR;
+  }
+  if (ptrs_.vkGetPipelineExecutablePropertiesKHR(
+          device_, &pipeline_info, &executable_count, properties.data()) !=
+      VK_SUCCESS) {
+    return;
+  }
+  properties.resize(executable_count);
+
+  for (uint32_t i = 0; i < executable_count; ++i) {
+    PipelineExecutable executable;
+    executable.source = kPipelineExecutableProperties;
+    executable.name = properties[i].name;
+    executable.description = properties[i].description;
+    executable.stages = ShaderStageNames(properties[i].stages);
+    executable.subgroup_size = properties[i].subgroupSize;
+
+    VkPipelineExecutableInfoKHR executable_info = {};
+    executable_info.sType = VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_INFO_KHR;
+    executable_info.pipeline = pipeline;
+    executable_info.executableIndex = i;
+
+    uint32_t statistic_count = 0;
+    if (ptrs_.vkGetPipelineExecutableStatisticsKHR != nullptr &&
+        ptrs_.vkGetPipelineExecutableStatisticsKHR(device_, &executable_info,
+                                                   &statistic_count,
+                                                   nullptr) == VK_SUCCESS) {
+      std::vector<VkPipelineExecutableStatisticKHR> statistics(statistic_count);
+      for (auto& statistic : statistics) {
+        statistic.sType = VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_STATISTIC_KHR;
+      }
+      if (ptrs_.vkGetPipelineExecutableStatisticsKHR(
+              device_, &executable_info, &statistic_count, statistics.data()) ==
+          VK_SUCCESS) {
+        statistics.resize(statistic_count);
+        for (const auto& statistic : statistics) {
+          executable.statistics.push_back(ToPipelineStatistic(statistic));
+        }
+      }
+    }
+
+    if (delegate_->CapturePipelineInternalRepresentations()) {
+      AddInternalRepresentations(executable_info, &executable);
+    }
+
+    report->executables.push_back(executable);
+  }
+}
+
+void Device::AddInternalRepresentations(
+    const VkPipelineExecutableInfoKHR& executable_info,
+    PipelineExecutable* executable) const {
+  if (ptrs_.vkGetPipelineExecutableInternalRepresentationsKHR == nullptr) {
+    return;
+  }
+  uint32_t count = 0;
+  if (ptrs_.vkGetPipelineExecutableInternalRepresentationsKHR(
+          device_, &executable_info, &count, nullptr) != VK_SUCCESS ||
+      count == 0) {
+    return;
+  }
+  std::vector<VkPipelineExecutableInternalRepresentationKHR> representations(
+      count);
+  for (auto& representation : representations) {
+    representation.sType =
+        VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_INTERNAL_REPRESENTATION_KHR;
+  }
+  if (ptrs_.vkGetPipelineExecutableInternalRepresentationsKHR(
+          device_, &executable_info, &count, representations.data()) !=
+      VK_SUCCESS) {
+    return;
+  }
+  representations.resize(count);
+  std::vector<std::vector<char>> data(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    data[i].resize(representations[i].dataSize);
+    representations[i].pData = data[i].data();
+  }
+  VkResult result = ptrs_.vkGetPipelineExecutableInternalRepresentationsKHR(
+      device_, &executable_info, &count, representations.data());
+  if (result != VK_SUCCESS && result != VK_INCOMPLETE) {
+    return;
+  }
+  for (uint32_t i = 0; i < count; ++i) {
+    PipelineInternalRepresentation representation;
+    representation.name = representations[i].name;
+    representation.description = representations[i].description;
+    representation.is_text = representations[i].isText == VK_TRUE;
+    size_t size = std::min(representations[i].dataSize, data[i].size());
+    if (representation.is_text) {
+      const auto end = data[i].begin() + static_cast<std::ptrdiff_t>(size);
+      size = static_cast<size_t>(std::find(data[i].begin(), end, '\0') -
+                                 data[i].begin());
+    }
+    representation.data.assign(data[i].data(), size);
+    executable->internal_representations.push_back(representation);
+  }
+}
+
+void Device::AddShaderInfoAMD(VkPipeline pipeline,
+                              const std::vector<VkShaderStageFlagBits>& stages,
+                              PipelineStatistics* report) const {
+  std::vector<VkShaderStageFlagBits> reported;
+  for (const auto stage : stages) {
+    if (std::find(reported.begin(), reported.end(), stage) != reported.end()) {
+      continue;
+    }
+    reported.push_back(stage);
+
+    VkShaderStatisticsInfoAMD info = {};
+    size_t size = sizeof(info);
+    if (ptrs_.vkGetShaderInfoAMD(device_, pipeline, stage,
+                                 VK_SHADER_INFO_TYPE_STATISTICS_AMD, &size,
+                                 &info) != VK_SUCCESS) {
+      continue;
+    }
+
+    PipelineExecutable executable;
+    executable.source = kShaderInfoAMD;
+    executable.name = ShaderStageName(stage);
+    executable.description = "VkShaderStatisticsInfoAMD";
+    executable.stages.push_back(ShaderStageName(stage));
+    const VkShaderResourceUsageAMD& usage = info.resourceUsage;
+    const std::vector<std::pair<const char*, uint64_t>> values = {
+        {"numUsedVgprs", usage.numUsedVgprs},
+        {"numUsedSgprs", usage.numUsedSgprs},
+        {"ldsSizePerLocalWorkGroup", usage.ldsSizePerLocalWorkGroup},
+        {"ldsUsageSizeInBytes", usage.ldsUsageSizeInBytes},
+        {"scratchMemUsageInBytes", usage.scratchMemUsageInBytes},
+        {"numPhysicalVgprs", info.numPhysicalVgprs},
+        {"numPhysicalSgprs", info.numPhysicalSgprs},
+        {"numAvailableVgprs", info.numAvailableVgprs},
+        {"numAvailableSgprs", info.numAvailableSgprs},
+    };
+    for (const auto& value : values) {
+      executable.statistics.push_back(MakeStatistic(
+          value.first, "", "uint64", std::to_string(value.second)));
+    }
+    report->executables.push_back(executable);
+  }
+}
+
+void Device::ReportPipelineStatistics(
+    const std::string& name,
+    const std::string& type,
+    VkPipeline pipeline,
+    const std::vector<VkShaderStageFlagBits>& stages,
+    double create_time_ms) {
+  if (!IsCapturingPipelineStatistics()) {
+    return;
+  }
+
+  PipelineStatistics report;
+  report.pipeline = name;
+  report.type = type;
+  report.create_time_ms = create_time_ms;
+
+  if (GetPipelineStatisticsCreateFlags() != 0) {
+    AddPipelineExecutableStatistics(pipeline, &report);
+  }
+  if (shader_info_amd_ && ptrs_.vkGetShaderInfoAMD != nullptr &&
+      type != "raytracing") {
+    AddShaderInfoAMD(pipeline, stages, &report);
+  }
+
+  delegate_->ReportPipelineStatistics(report);
 }
 
 Result Device::Initialize(

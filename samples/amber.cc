@@ -25,6 +25,7 @@
 #include <iostream>
 #include <ostream>
 #include <set>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -34,6 +35,10 @@
 #include "samples/ppm.h"
 #include "samples/timestamp.h"
 #include "src/build-versions.h"
+
+#if AMBER_ENGINE_VULKAN
+#include "amber/amber_vulkan.h"
+#endif  // AMBER_ENGINE_VULKAN
 
 #if AMBER_ENABLE_SPIRV_TOOLS
 #include "spirv-tools/libspirv.hpp"
@@ -72,6 +77,8 @@ struct Options {
   bool disable_spirv_validation = false;
   bool enable_pipeline_runtime_layer = false;
   std::string layer_library;
+  std::string pipeline_stats_filename;
+  bool pipeline_internal_representations = false;
   std::string shader_filename;
   amber::EngineType engine = amber::kEngineTypeVulkan;
   std::string spv_env;
@@ -118,6 +125,14 @@ const char kUsage[] = R"(Usage: amber [options] SCRIPT [SCRIPTS...]
                                between Amber and the Vulkan loader, without a layer manifest
                                (Vulkan only). For example the ML emulation layer
                                (VkLayer_Tensor) to run VK_ARM_tensors scripts.
+  --pipeline-stats <filename> -- Write the statistics of every pipeline created to
+                               |filename| as JSON (Vulkan only): the wall time of each
+                               pipeline creation, and the driver's statistics of each
+                               pipeline executable and shader stage when the device
+                               supports VK_KHR_pipeline_executable_properties or
+                               VK_AMD_shader_info.
+  --pipeline-ir             -- With --pipeline-stats, also write the internal
+                               representations of every pipeline executable.
   -h                        -- This help text.
 )";
 
@@ -318,12 +333,28 @@ bool ParseArgs(const std::vector<std::string>& args, Options* opts) {
         return false;
       }
       opts->layer_library = args[i];
+    } else if (arg == "--pipeline-stats") {
+      ++i;
+      if (i >= args.size() || args[i].empty()) {
+        std::cerr << "Missing value for --pipeline-stats argument."
+                  << std::endl;
+        return false;
+      }
+      opts->pipeline_stats_filename = args[i];
+    } else if (arg == "--pipeline-ir") {
+      opts->pipeline_internal_representations = true;
     } else if (arg.size() > 0 && arg[0] == '-') {
       std::cerr << "Unrecognized option " << arg << std::endl;
       return false;
     } else if (!arg.empty()) {
       opts->input_filenames.push_back(arg);
     }
+  }
+
+  if (opts->pipeline_internal_representations &&
+      opts->pipeline_stats_filename.empty()) {
+    std::cerr << "--pipeline-ir needs --pipeline-stats." << std::endl;
+    return false;
   }
 
   if (opts->selected_device > -1 && !opts->selected_device_name.empty()) {
@@ -410,6 +441,29 @@ class SampleDelegate : public amber::Delegate {
     return returning;
   }
 
+  bool CapturePipelineStatistics() const override {
+    return capture_pipeline_statistics_;
+  }
+  bool CapturePipelineInternalRepresentations() const override {
+    return capture_pipeline_internal_representations_;
+  }
+  void SetCapturePipelineStatistics(bool capture,
+                                    bool internal_representations) {
+    capture_pipeline_statistics_ = capture;
+    capture_pipeline_internal_representations_ = internal_representations;
+  }
+
+  void ReportPipelineStatistics(
+      const amber::PipelineStatistics& statistics) override {
+    reported_pipeline_statistics_.push_back(statistics);
+  }
+
+  std::vector<amber::PipelineStatistics> GetAndClearPipelineStatistics() {
+    auto returning = reported_pipeline_statistics_;
+    reported_pipeline_statistics_.clear();
+    return returning;
+  }
+
   uint64_t GetTimestampNs() const override {
     return timestamp::SampleGetTimestampNs();
   }
@@ -460,7 +514,139 @@ class SampleDelegate : public amber::Delegate {
   bool log_execute_calls_ = false;
   std::string path_ = "";
   std::vector<double> reported_execution_timing;
+  bool capture_pipeline_statistics_ = false;
+  bool capture_pipeline_internal_representations_ = false;
+  std::vector<amber::PipelineStatistics> reported_pipeline_statistics_;
 };
+
+std::string JsonString(const std::string& text) {
+  std::ostringstream out;
+  out << '"';
+  for (const char c : text) {
+    switch (c) {
+      case '"':
+        out << "\\\"";
+        break;
+      case '\\':
+        out << "\\\\";
+        break;
+      case '\n':
+        out << "\\n";
+        break;
+      case '\r':
+        out << "\\r";
+        break;
+      case '\t':
+        out << "\\t";
+        break;
+      default:
+        if (static_cast<unsigned char>(c) < 0x20) {
+          out << "\\u" << std::hex << std::setw(4) << std::setfill('0')
+              << static_cast<int>(c) << std::dec << std::setfill(' ');
+        } else {
+          out << c;
+        }
+        break;
+    }
+  }
+  out << '"';
+  return out.str();
+}
+
+std::string JsonHex(const std::string& data) {
+  std::ostringstream out;
+  out << '"' << std::hex << std::setfill('0');
+  for (const char c : data) {
+    out << std::setw(2) << static_cast<int>(static_cast<unsigned char>(c));
+  }
+  out << '"';
+  return out.str();
+}
+
+std::string JsonStatisticValue(const amber::PipelineStatistic& statistic) {
+  if (statistic.format == "bool32" &&
+      (statistic.value == "true" || statistic.value == "false")) {
+    return statistic.value;
+  }
+  const bool number = statistic.format == "int64" ||
+                      statistic.format == "uint64" ||
+                      statistic.format == "float64";
+  if (number && !statistic.value.empty() &&
+      statistic.value.find_first_not_of("0123456789+-.eE") ==
+          std::string::npos) {
+    return statistic.value;
+  }
+  return JsonString(statistic.value);
+}
+
+struct ScriptPipelineStatistics {
+  std::string script;
+  amber::PipelineStatistics statistics;
+};
+
+bool WritePipelineStatistics(
+    const std::string& filename,
+    bool pipeline_executable_properties,
+    bool shader_info_amd,
+    const std::vector<ScriptPipelineStatistics>& pipelines) {
+  std::ofstream out(filename, std::ios::out | std::ios::trunc);
+  if (!out.is_open()) {
+    return false;
+  }
+  out << std::setprecision(17);
+  out << "{\n  \"pipeline_executable_properties\": "
+      << (pipeline_executable_properties ? "true" : "false")
+      << ",\n  \"shader_info_amd\": " << (shader_info_amd ? "true" : "false")
+      << ",\n  \"pipelines\": [";
+  for (size_t p = 0; p < pipelines.size(); ++p) {
+    const auto& pipeline = pipelines[p].statistics;
+    out << (p == 0 ? "\n" : ",\n")
+        << "    {\"script\": " << JsonString(pipelines[p].script)
+        << ", \"pipeline\": " << JsonString(pipeline.pipeline)
+        << ", \"type\": " << JsonString(pipeline.type)
+        << ", \"create_time_ms\": " << pipeline.create_time_ms
+        << ", \"executables\": [";
+    for (size_t e = 0; e < pipeline.executables.size(); ++e) {
+      const auto& executable = pipeline.executables[e];
+      out << (e == 0 ? "\n" : ",\n")
+          << "      {\"source\": " << JsonString(executable.source)
+          << ", \"name\": " << JsonString(executable.name)
+          << ", \"description\": " << JsonString(executable.description)
+          << ", \"stages\": [";
+      for (size_t s = 0; s < executable.stages.size(); ++s) {
+        out << (s == 0 ? "" : ", ") << JsonString(executable.stages[s]);
+      }
+      out << "], \"subgroup_size\": " << executable.subgroup_size
+          << ", \"statistics\": [";
+      for (size_t s = 0; s < executable.statistics.size(); ++s) {
+        const auto& statistic = executable.statistics[s];
+        out << (s == 0 ? "\n" : ",\n")
+            << "        {\"name\": " << JsonString(statistic.name)
+            << ", \"description\": " << JsonString(statistic.description)
+            << ", \"format\": " << JsonString(statistic.format)
+            << ", \"value\": " << JsonStatisticValue(statistic) << "}";
+      }
+      out << (executable.statistics.empty() ? "]" : "\n      ]")
+          << ", \"internal_representations\": [";
+      for (size_t r = 0; r < executable.internal_representations.size(); ++r) {
+        const auto& representation = executable.internal_representations[r];
+        out << (r == 0 ? "\n" : ",\n")
+            << "        {\"name\": " << JsonString(representation.name)
+            << ", \"description\": " << JsonString(representation.description)
+            << ", \"is_text\": " << (representation.is_text ? "true" : "false")
+            << ", \"data\": "
+            << (representation.is_text ? JsonString(representation.data)
+                                       : JsonHex(representation.data))
+            << "}";
+      }
+      out << (executable.internal_representations.empty() ? "]}"
+                                                          : "\n      ]}");
+    }
+    out << (pipeline.executables.empty() ? "]}" : "\n    ]}");
+  }
+  out << (pipelines.empty() ? "]\n}\n" : "\n  ]\n}\n");
+  return out.good();
+}
 
 std::string disassemble(const std::string& env,
                         const std::vector<uint32_t>& data) {
@@ -601,6 +787,9 @@ int main(int argc, const char** argv) {
   if (options.log_execute_calls) {
     delegate.SetLogExecuteCalls(true);
   }
+  delegate.SetCapturePipelineStatistics(
+      !options.pipeline_stats_filename.empty(),
+      options.pipeline_internal_representations);
 
   amber::Options amber_options;
   amber_options.engine = options.engine;
@@ -641,7 +830,8 @@ int main(int argc, const char** argv) {
       std::vector<std::string>(required_device_extensions.begin(),
                                required_device_extensions.end()),
       options.disable_validation_layer, options.enable_pipeline_runtime_layer,
-      options.layer_library, options.show_version_info, &config);
+      options.layer_library, options.show_version_info,
+      !options.pipeline_stats_filename.empty(), &config);
 
   if (!r.IsSuccess()) {
     std::cout << r.Error() << std::endl;
@@ -649,6 +839,18 @@ int main(int argc, const char** argv) {
   }
 
   amber_options.config = config.get();
+
+  bool pipeline_executable_properties = false;
+  bool shader_info_amd = false;
+#if AMBER_ENGINE_VULKAN
+  if (amber_options.engine == amber::kEngineTypeVulkan) {
+    const auto* vulkan_config =
+        static_cast<const amber::VulkanEngineConfig*>(config.get());
+    pipeline_executable_properties = vulkan_config->pipeline_executable_info;
+    shader_info_amd = vulkan_config->shader_info_amd;
+  }
+#endif  // AMBER_ENGINE_VULKAN
+  std::vector<ScriptPipelineStatistics> pipeline_statistics;
 
   if (!options.buffer_filename.empty()) {
     // Have a filename to dump, but no explicit buffer, set the default of 0:0.
@@ -692,6 +894,10 @@ int main(int argc, const char** argv) {
       failures.push_back(file);
       // Note, we continue after failure to allow dumping the buffers which may
       // give clues as to the failure.
+    }
+
+    for (auto& statistics : delegate.GetAndClearPipelineStatistics()) {
+      pipeline_statistics.push_back({file, statistics});
     }
 
     auto execution_timing = delegate.GetAndClearExecutionTiming();
@@ -825,6 +1031,15 @@ int main(int argc, const char** argv) {
         buffer_file.close();
       }
     }
+  }
+
+  if (!options.pipeline_stats_filename.empty() &&
+      !WritePipelineStatistics(options.pipeline_stats_filename,
+                               pipeline_executable_properties, shader_info_amd,
+                               pipeline_statistics)) {
+    std::cerr << "Cannot write the pipeline statistics to "
+              << options.pipeline_stats_filename << std::endl;
+    failures.push_back(options.pipeline_stats_filename);
   }
 
   if (!options.quiet) {

@@ -87,6 +87,7 @@ amber::Result ConfigHelperDawn::CreateConfig(
     bool,
     const std::string&,
     bool,
+    bool,
     std::unique_ptr<amber::EngineConfig>* config) {
   const char* allow_unsafe_apis = "allow_unsafe_apis";
   wgpu::DawnTogglesDescriptor toggles;

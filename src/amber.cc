@@ -82,6 +82,44 @@ BufferInfo::~BufferInfo() = default;
 
 BufferInfo& BufferInfo::operator=(const BufferInfo&) = default;
 
+PipelineStatistic::PipelineStatistic() = default;
+
+PipelineStatistic::PipelineStatistic(const PipelineStatistic&) = default;
+
+PipelineStatistic::~PipelineStatistic() = default;
+
+PipelineStatistic& PipelineStatistic::operator=(const PipelineStatistic&) =
+    default;
+
+PipelineInternalRepresentation::PipelineInternalRepresentation()
+    : is_text(false) {}
+
+PipelineInternalRepresentation::PipelineInternalRepresentation(
+    const PipelineInternalRepresentation&) = default;
+
+PipelineInternalRepresentation::~PipelineInternalRepresentation() = default;
+
+PipelineInternalRepresentation& PipelineInternalRepresentation::operator=(
+    const PipelineInternalRepresentation&) = default;
+
+PipelineExecutable::PipelineExecutable() : subgroup_size(0) {}
+
+PipelineExecutable::PipelineExecutable(const PipelineExecutable&) = default;
+
+PipelineExecutable::~PipelineExecutable() = default;
+
+PipelineExecutable& PipelineExecutable::operator=(const PipelineExecutable&) =
+    default;
+
+PipelineStatistics::PipelineStatistics() : create_time_ms(0.0) {}
+
+PipelineStatistics::PipelineStatistics(const PipelineStatistics&) = default;
+
+PipelineStatistics::~PipelineStatistics() = default;
+
+PipelineStatistics& PipelineStatistics::operator=(const PipelineStatistics&) =
+    default;
+
 Delegate::~Delegate() = default;
 
 Amber::Amber(Delegate* delegate) : delegate_(delegate) {}

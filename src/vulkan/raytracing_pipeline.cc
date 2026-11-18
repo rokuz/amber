@@ -96,7 +96,7 @@ Result RayTracingPipeline::CreateVkRayTracingPipeline(
   VkRayTracingPipelineCreateInfoKHR pipelineCreateInfo{
       VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR,
       nullptr,
-      create_flags_,
+      create_flags_ | GetStatisticsCreateFlags(),
       static_cast<uint32_t>(shader_stage_info.size()),
       shader_stage_info.data(),
       static_cast<uint32_t>(shader_group_create_info_.size()),
@@ -110,12 +110,14 @@ Result RayTracingPipeline::CreateVkRayTracingPipeline(
       0,
   };
 
+  const auto start = std::chrono::steady_clock::now();
   VkResult r = device_->GetPtrs()->vkCreateRayTracingPipelinesKHR(
       device_->GetVkDevice(), VK_NULL_HANDLE, VK_NULL_HANDLE, 1u,
       &pipelineCreateInfo, nullptr, pipeline);
   if (r != VK_SUCCESS) {
     return Result("Vulkan::Calling vkCreateRayTracingPipelinesKHR Fail");
   }
+  ReportStatistics(*pipeline, start);
 
   return {};
 }
@@ -149,7 +151,7 @@ Result RayTracingPipeline::CreateVkRayTracingPipelineNV(
 
   VkRayTracingPipelineCreateInfoNV create_info = {};
   create_info.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_NV;
-  create_info.flags = create_flags_;
+  create_info.flags = create_flags_ | GetStatisticsCreateFlags();
   create_info.stageCount = static_cast<uint32_t>(shader_stage_info.size());
   create_info.pStages = shader_stage_info.data();
   create_info.groupCount = static_cast<uint32_t>(groups.size());
@@ -158,12 +160,14 @@ Result RayTracingPipeline::CreateVkRayTracingPipelineNV(
   create_info.layout = pipeline_layout;
   create_info.basePipelineIndex = -1;
 
+  const auto start = std::chrono::steady_clock::now();
   VkResult r = device_->GetPtrs()->vkCreateRayTracingPipelinesNV(
       device_->GetVkDevice(), VK_NULL_HANDLE, 1u, &create_info, nullptr,
       pipeline);
   if (r != VK_SUCCESS) {
     return Result("Vulkan::Calling vkCreateRayTracingPipelinesNV Fail");
   }
+  ReportStatistics(*pipeline, start);
 
   return {};
 }

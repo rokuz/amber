@@ -70,6 +70,88 @@ struct BufferInfo {
   std::vector<Value> values;
 };
 
+/// A statistic the driver reports for a pipeline executable or a shader stage.
+struct PipelineStatistic {
+  PipelineStatistic();
+  PipelineStatistic(const PipelineStatistic&);
+  ~PipelineStatistic();
+
+  PipelineStatistic& operator=(const PipelineStatistic&);
+
+  /// Short name of the statistic.
+  std::string name;
+  /// Description of the statistic.
+  std::string description;
+  /// Type of the value: "bool32", "int64", "uint64" or "float64".
+  std::string format;
+  /// The value, formatted as text.
+  std::string value;
+};
+
+/// An internal representation of a pipeline executable, such as the
+/// compiler's intermediate code or the ISA.
+struct PipelineInternalRepresentation {
+  PipelineInternalRepresentation();
+  PipelineInternalRepresentation(const PipelineInternalRepresentation&);
+  ~PipelineInternalRepresentation();
+
+  PipelineInternalRepresentation& operator=(
+      const PipelineInternalRepresentation&);
+
+  /// Short name of the representation.
+  std::string name;
+  /// Description of the representation.
+  std::string description;
+  /// True if |data| is text, false if it is binary data.
+  bool is_text;
+  /// The contents of the representation.
+  std::string data;
+};
+
+/// A pipeline executable, or a shader stage for statistics which are
+/// reported per stage.
+struct PipelineExecutable {
+  PipelineExecutable();
+  PipelineExecutable(const PipelineExecutable&);
+  ~PipelineExecutable();
+
+  PipelineExecutable& operator=(const PipelineExecutable&);
+
+  /// The Vulkan extension which reported the executable:
+  /// "VK_KHR_pipeline_executable_properties" or "VK_AMD_shader_info".
+  std::string source;
+  /// Short name of the executable.
+  std::string name;
+  /// Description of the executable.
+  std::string description;
+  /// Shader stages of the executable, e.g. "vertex", "fragment".
+  std::vector<std::string> stages;
+  /// The subgroup size the executable was compiled with, 0 if unknown.
+  uint32_t subgroup_size;
+  /// The statistics of the executable.
+  std::vector<PipelineStatistic> statistics;
+  /// The internal representations of the executable.
+  std::vector<PipelineInternalRepresentation> internal_representations;
+};
+
+/// Statistics of a pipeline created while executing a script.
+struct PipelineStatistics {
+  PipelineStatistics();
+  PipelineStatistics(const PipelineStatistics&);
+  ~PipelineStatistics();
+
+  PipelineStatistics& operator=(const PipelineStatistics&);
+
+  /// The name of the pipeline in the script.
+  std::string pipeline;
+  /// The type of the pipeline: "compute", "graphics" or "raytracing".
+  std::string type;
+  /// The wall time of the pipeline creation call in milliseconds.
+  double create_time_ms;
+  /// The executables of the pipeline.
+  std::vector<PipelineExecutable> executables;
+};
+
 /// Types of source file to load buffer data from.
 enum class BufferDataFileType : int8_t {
   /// Unknown file type
@@ -107,6 +189,14 @@ class Delegate {
 
   /// Mechanism for gathering timing from 'TIME_EXECUTION'
   virtual void ReportExecutionTiming(double) {}
+
+  /// Tells whether to capture and report the statistics of every pipeline
+  virtual bool CapturePipelineStatistics() const { return false; }
+  /// Tells whether to capture the internal representations of every pipeline
+  /// with its statistics
+  virtual bool CapturePipelineInternalRepresentations() const { return false; }
+  /// Mechanism for gathering the statistics of every pipeline created
+  virtual void ReportPipelineStatistics(const PipelineStatistics&) {}
 };
 
 /// Stores configuration options for Amber.

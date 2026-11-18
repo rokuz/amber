@@ -118,8 +118,38 @@ class Device {
   // Each timed execution reports timing to the device and on to the delegate.
   void ReportExecutionTiming(double time_in_ns);
 
+  /// Sets which extensions for pipeline statistics the device was created
+  /// with.
+  void SetPipelineStatisticsSupport(bool pipeline_executable_info,
+                                    bool shader_info_amd) {
+    pipeline_executable_info_ = pipeline_executable_info;
+    shader_info_amd_ = shader_info_amd;
+  }
+  /// Returns true if the statistics of every pipeline are reported.
+  bool IsCapturingPipelineStatistics() const;
+  /// Returns the pipeline create flags which capture the statistics of a
+  /// pipeline, and its internal representations if they are requested.
+  VkPipelineCreateFlags GetPipelineStatisticsCreateFlags() const;
+  /// Queries the statistics of the |type| pipeline |pipeline|, created with
+  /// the flags of GetPipelineStatisticsCreateFlags() from |stages| in
+  /// |create_time_ms|, and reports them to the delegate.
+  void ReportPipelineStatistics(
+      const std::string& name,
+      const std::string& type,
+      VkPipeline pipeline,
+      const std::vector<VkShaderStageFlagBits>& stages,
+      double create_time_ms);
+
  private:
   Result LoadVulkanPointers(PFN_vkGetInstanceProcAddr, Delegate* delegate);
+  void AddPipelineExecutableStatistics(VkPipeline pipeline,
+                                       PipelineStatistics* report) const;
+  void AddInternalRepresentations(
+      const VkPipelineExecutableInfoKHR& executable_info,
+      PipelineExecutable* executable) const;
+  void AddShaderInfoAMD(VkPipeline pipeline,
+                        const std::vector<VkShaderStageFlagBits>& stages,
+                        PipelineStatistics* report) const;
   bool SupportsApiVersion(uint32_t major, uint32_t minor, uint32_t patch);
 
   VkInstance instance_ = VK_NULL_HANDLE;
@@ -137,6 +167,8 @@ class Device {
   uint32_t max_shader_group_stride_ = 0;
   bool mesh_shader_nv_ = false;
   bool ray_tracing_position_fetch_ = false;
+  bool pipeline_executable_info_ = false;
+  bool shader_info_amd_ = false;
 
   VulkanPtrs ptrs_;
 

@@ -75,6 +75,13 @@ struct VulkanEngineConfig : public EngineConfig {
 
   /// The VkQueue to use.
   VkQueue queue;
+
+  /// True if |device| was created with VK_KHR_pipeline_executable_properties
+  /// and its pipelineExecutableInfo feature enabled.
+  bool pipeline_executable_info = false;
+
+  /// True if |device| was created with VK_AMD_shader_info enabled.
+  bool shader_info_amd = false;
 };
 
 }  // namespace amber
