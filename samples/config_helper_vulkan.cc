@@ -2811,6 +2811,19 @@ amber::Result ConfigHelperVulkan::CreateConfig(
   config->available_features2 = features_.features2;
   config->available_instance_extensions = vk_.available_instance_extensions;
   config->available_device_extensions = vk_.available_device_extensions;
+  auto get_properties2 = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties2>(
+      ChainGetInstanceProcAddr(vk_.instance,
+                               "vkGetPhysicalDeviceProperties2"));
+  if (get_properties2) {
+    float_controls_ = {};
+    float_controls_.sType =
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES;
+    properties2_ = {};
+    properties2_.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    properties2_.pNext = &float_controls_;
+    get_properties2(vk_.physical_device, &properties2_);
+    config->available_properties2 = properties2_;
+  }
   config->instance = vk_.instance;
   config->queue_family_index = vk_.queue_family_index;
   config->queue = vk_.queue;

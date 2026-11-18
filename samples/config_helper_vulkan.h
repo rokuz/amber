@@ -143,6 +143,8 @@ class ConfigHelperVulkan : public ConfigHelperImpl {
   } supports_;
 
   bool pipeline_statistics_ = false;
+  VkPhysicalDeviceFloatControlsProperties float_controls_ = {};
+  VkPhysicalDeviceProperties2KHR properties2_ = {};
 
   struct {
     VkPhysicalDeviceFeatures device{};
