@@ -2499,6 +2499,32 @@ void ConfigHelperVulkan::DumpPhysicalDeviceInfo() {
   std::cout << "  deviceType: " << deviceTypeToName(props.deviceType)
             << std::endl;
   std::cout << "  deviceName: " << props.deviceName << std::endl;
+  const VkPhysicalDeviceLimits& limits = props.limits;
+  std::cout << "  maxVertexInputAttributes: "
+            << limits.maxVertexInputAttributes << std::endl;
+  std::cout << "  maxVertexOutputComponents: "
+            << limits.maxVertexOutputComponents << std::endl;
+  std::cout << "  maxTessellationControlPerVertexInputComponents: "
+            << limits.maxTessellationControlPerVertexInputComponents
+            << std::endl;
+  std::cout << "  maxTessellationControlPerVertexOutputComponents: "
+            << limits.maxTessellationControlPerVertexOutputComponents
+            << std::endl;
+  std::cout << "  maxTessellationControlPerPatchOutputComponents: "
+            << limits.maxTessellationControlPerPatchOutputComponents
+            << std::endl;
+  std::cout << "  maxTessellationEvaluationInputComponents: "
+            << limits.maxTessellationEvaluationInputComponents << std::endl;
+  std::cout << "  maxTessellationEvaluationOutputComponents: "
+            << limits.maxTessellationEvaluationOutputComponents << std::endl;
+  std::cout << "  maxGeometryInputComponents: "
+            << limits.maxGeometryInputComponents << std::endl;
+  std::cout << "  maxGeometryOutputComponents: "
+            << limits.maxGeometryOutputComponents << std::endl;
+  std::cout << "  maxFragmentInputComponents: "
+            << limits.maxFragmentInputComponents << std::endl;
+  std::cout << "  maxFragmentOutputAttachments: "
+            << limits.maxFragmentOutputAttachments << std::endl;
   if (vkGetPhysicalDeviceProperties2KHR) {
     std::cout << "  driverName: " << driver_properties.driverName << std::endl;
     std::cout << "  driverInfo: " << driver_properties.driverInfo << std::endl;
@@ -2679,6 +2705,47 @@ void ConfigHelperVulkan::DumpPhysicalDeviceInfo() {
               << tensor.maxTensorShaderAccessArrayLength << std::endl;
     std::cout << "  shaderTensorSupportedStages: "
               << tensor.shaderTensorSupportedStages << std::endl;
+    auto get_format_properties2 =
+        reinterpret_cast<PFN_vkGetPhysicalDeviceFormatProperties2>(
+            ChainGetInstanceProcAddr(vk_.instance,
+                                     "vkGetPhysicalDeviceFormatProperties2"));
+    if (get_format_properties2) {
+      const std::pair<VkFormat, const char*> formats[] = {
+          {VK_FORMAT_R8_BOOL_ARM, "VK_FORMAT_R8_BOOL_ARM"},
+          {VK_FORMAT_R8_SINT, "VK_FORMAT_R8_SINT"},
+          {VK_FORMAT_R16_SINT, "VK_FORMAT_R16_SINT"},
+          {VK_FORMAT_R32_SINT, "VK_FORMAT_R32_SINT"},
+          {VK_FORMAT_R64_SINT, "VK_FORMAT_R64_SINT"},
+          {VK_FORMAT_R8_UINT, "VK_FORMAT_R8_UINT"},
+          {VK_FORMAT_R16_UINT, "VK_FORMAT_R16_UINT"},
+          {VK_FORMAT_R32_UINT, "VK_FORMAT_R32_UINT"},
+          {VK_FORMAT_R64_UINT, "VK_FORMAT_R64_UINT"},
+          {VK_FORMAT_R16_SFLOAT, "VK_FORMAT_R16_SFLOAT"},
+          {VK_FORMAT_R32_SFLOAT, "VK_FORMAT_R32_SFLOAT"},
+          {VK_FORMAT_R64_SFLOAT, "VK_FORMAT_R64_SFLOAT"},
+          {VK_FORMAT_R16_SFLOAT_FPENCODING_BFLOAT16_ARM,
+           "VK_FORMAT_R16_SFLOAT_FPENCODING_BFLOAT16_ARM"},
+          {VK_FORMAT_R8_SFLOAT_FPENCODING_FLOAT8E4M3_ARM,
+           "VK_FORMAT_R8_SFLOAT_FPENCODING_FLOAT8E4M3_ARM"},
+          {VK_FORMAT_R8_SFLOAT_FPENCODING_FLOAT8E5M2_ARM,
+           "VK_FORMAT_R8_SFLOAT_FPENCODING_FLOAT8E5M2_ARM"},
+      };
+      for (const auto& format : formats) {
+        VkTensorFormatPropertiesARM tensor_format{};
+        tensor_format.sType = VK_STRUCTURE_TYPE_TENSOR_FORMAT_PROPERTIES_ARM;
+        VkFormatProperties2 format_properties{};
+        format_properties.sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2;
+        format_properties.pNext = &tensor_format;
+        get_format_properties2(vk_.physical_device, format.first,
+                               &format_properties);
+        const bool shader =
+            ((tensor_format.optimalTilingTensorFeatures |
+              tensor_format.linearTilingTensorFeatures) &
+             VK_FORMAT_FEATURE_2_TENSOR_SHADER_BIT_ARM) != 0;
+        std::cout << "  tensorShaderFormat: " << format.second << " "
+                  << (shader ? 1 : 0) << std::endl;
+      }
+    }
   }
   std::cout << "End of physical device properties." << std::endl;
 }
