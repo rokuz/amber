@@ -118,7 +118,7 @@ Result ImageDescriptor::CreateResourceIfNeeded() {
     transfer_resources[amber_buffer] = std::move(transfer_image);
   }
 
-  if (amber_sampler_) {
+  if (amber_sampler_ && vulkan_sampler_.GetVkSampler() == VK_NULL_HANDLE) {
     Result r = vulkan_sampler_.CreateSampler(amber_sampler_);
     if (!r.IsSuccess()) {
       return r;

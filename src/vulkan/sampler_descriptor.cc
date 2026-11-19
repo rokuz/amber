@@ -32,6 +32,10 @@ SamplerDescriptor::SamplerDescriptor(amber::Sampler* sampler,
 SamplerDescriptor::~SamplerDescriptor() = default;
 
 Result SamplerDescriptor::CreateResourceIfNeeded() {
+  if (!vulkan_samplers_.empty()) {
+    return {};
+  }
+
   vulkan_samplers_.reserve(amber_samplers_.size());
   for (const auto& sampler : amber_samplers_) {
     vulkan_samplers_.emplace_back(std::make_unique<Sampler>(device_));
