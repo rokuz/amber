@@ -107,7 +107,9 @@ const char kUsage[] = R"(Usage: amber [options] SCRIPT [SCRIPTS...]
   -i <filename>             -- Write rendering to <filename> as a PNG image if it ends with '.png',
                                or as a PPM image otherwise.
   -I <buffername>           -- Name of framebuffer to dump. Defaults to 'framebuffer'.
-  -b <filename>             -- Write contents of a UBO or SSBO to <filename>.
+  -b <filename>             -- Write contents of a UBO or SSBO to <filename>;
+                               {script} in it is replaced by the script's path,
+                               so that each script writes a file of its own.
   -B [<pipeline name>:][<desc set>:]<binding> -- Identifier of buffer to write.
                                Default is [first pipeline:][0:]0.
   -w <filename>             -- Write shader assembly to |filename|
@@ -903,7 +905,7 @@ int main(int argc, const char** argv) {
     auto execution_timing = delegate.GetAndClearExecutionTiming();
     if (result.IsSuccess() && options.log_execution_timing &&
         !execution_timing.empty()) {
-      std::cout << "Execution timing (in script-order):" << "\n";
+      std::cout << "Execution timing (in script-order): " << file << "\n";
       std::cout << "    ";
       bool is_first_iter = true;
       for (auto& timing : execution_timing) {
@@ -1001,11 +1003,17 @@ int main(int argc, const char** argv) {
     }
 
     if (!options.buffer_filename.empty()) {
+      std::string buffer_filename = options.buffer_filename;
+      const std::string script_token = "{script}";
+      const auto token = buffer_filename.find(script_token);
+      if (token != std::string::npos) {
+        buffer_filename.replace(token, script_token.size(), file);
+      }
       std::ofstream buffer_file;
-      buffer_file.open(options.buffer_filename, std::ios::out);
+      buffer_file.open(buffer_filename, std::ios::out);
       if (!buffer_file.is_open()) {
         std::cerr << "Cannot open file for buffer dump: ";
-        std::cerr << options.buffer_filename << std::endl;
+        std::cerr << buffer_filename << std::endl;
       } else {
         for (const amber::BufferInfo& buffer_info : amber_options.extractions) {
           // Skip frame buffers.

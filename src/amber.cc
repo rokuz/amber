@@ -208,6 +208,12 @@ amber::Result Amber::Execute(const amber::Recipe* recipe, Options* opts) {
 amber::Result Amber::ExecuteWithShaderData(const amber::Recipe* recipe,
                                            Options* opts,
                                            const ShaderMap& shader_data) {
+  for (BufferInfo& buffer_info : opts->extractions) {
+    buffer_info.width = 0;
+    buffer_info.height = 0;
+    buffer_info.values.clear();
+  }
+
   std::unique_ptr<Engine> engine;
   Script* script = nullptr;
   Result r = CreateEngineAndCheckRequirements(recipe, opts, GetDelegate(),
@@ -258,6 +264,9 @@ amber::Result Amber::ExecuteWithShaderData(const amber::Recipe* recipe,
       pipeline = script->GetPipeline(p.PipelineName());
     } else {
       pipeline = script->GetPipelines()[0].get();
+    }
+    if (!pipeline) {
+      continue;
     }
 
     const auto* buffer =
