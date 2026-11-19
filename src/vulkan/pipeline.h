@@ -118,7 +118,7 @@ class Pipeline {
   // This functions are used in benchmarking when 'TIMED_EXECUTION' option is
   // specifed.
   void CreateTimingQueryObjectIfNeeded(bool is_timed_execution);
-  void DestroyTimingQueryObjectIfNeeded();
+  Result DestroyTimingQueryObjectIfNeeded();
   void BeginTimerQuery();
   void EndTimerQuery();
 

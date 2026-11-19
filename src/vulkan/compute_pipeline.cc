@@ -138,7 +138,10 @@ Result ComputePipeline::Compute(uint32_t x,
       return r;
     }
   }
-  DestroyTimingQueryObjectIfNeeded();
+  r = DestroyTimingQueryObjectIfNeeded();
+  if (!r.IsSuccess()) {
+    return r;
+  }
   r = ReadbackDescriptorsToHostDataQueue();
   if (!r.IsSuccess()) {
     return r;

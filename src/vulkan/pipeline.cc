@@ -321,29 +321,34 @@ void Pipeline::CreateTimingQueryObjectIfNeeded(bool is_timed_execution) {
       device_->GetVkDevice(), &pool_create_info, nullptr, &query_pool_);
 }
 
-void Pipeline::DestroyTimingQueryObjectIfNeeded() {
+Result Pipeline::DestroyTimingQueryObjectIfNeeded() {
   if (!in_timed_execution_) {
-    return;
+    return {};
   }
 
-  // Flags set so we may/will wait on the CPU for the availiblity of our
-  // queries.
-  const VkQueryResultFlags flags =
-      VK_QUERY_RESULT_WAIT_BIT | VK_QUERY_RESULT_64_BIT;
+  // The submit waited for the fence, so both timestamps must be available;
+  // never wait for them, a missing one is an error.
+  const VkQueryResultFlags flags = VK_QUERY_RESULT_64_BIT;
   std::array<uint64_t, kNumQueryObjects> time_stamps = {};
   constexpr VkDeviceSize kStrideBytes = sizeof(uint64_t);
 
-  device_->GetPtrs()->vkGetQueryPoolResults(
+  VkResult status = device_->GetPtrs()->vkGetQueryPoolResults(
       device_->GetVkDevice(), query_pool_, 0, kNumQueryObjects,
       sizeof(time_stamps), time_stamps.data(), kStrideBytes, flags);
+  device_->GetPtrs()->vkDestroyQueryPool(device_->GetVkDevice(), query_pool_,
+                                         nullptr);
+  in_timed_execution_ = false;
+  if (status != VK_SUCCESS) {
+    return Result(
+        "Vulkan: the timestamps of a timed execution are not available after "
+        "its submit completed");
+  }
   double time_in_ns = static_cast<double>(time_stamps[1] - time_stamps[0]) *
                       static_cast<double>(device_->GetTimestampPeriod());
 
   constexpr double kNsToMsTime = 1.0 / 1000000.0;
   device_->ReportExecutionTiming(time_in_ns * kNsToMsTime);
-  device_->GetPtrs()->vkDestroyQueryPool(device_->GetVkDevice(), query_pool_,
-                                         nullptr);
-  in_timed_execution_ = false;
+  return {};
 }
 
 void Pipeline::BeginTimerQuery() {

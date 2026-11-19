@@ -371,7 +371,10 @@ Result RayTracingPipeline::TraceRays(amber::SBT* rSBT,
       return r;
     }
   }
-  DestroyTimingQueryObjectIfNeeded();
+  r = DestroyTimingQueryObjectIfNeeded();
+  if (!r.IsSuccess()) {
+    return r;
+  }
   r = ReadbackDescriptorsToHostDataQueue();
   if (!r.IsSuccess()) {
     return r;

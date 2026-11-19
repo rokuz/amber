@@ -1253,7 +1253,10 @@ Result GraphicsPipeline::RecordDraw(const PipelineData* pipeline_data,
       return r;
     }
   }
-  DestroyTimingQueryObjectIfNeeded();
+  r = DestroyTimingQueryObjectIfNeeded();
+  if (!r.IsSuccess()) {
+    return r;
+  }
   r = ReadbackDescriptorsToHostDataQueue();
   if (!r.IsSuccess()) {
     return r;
