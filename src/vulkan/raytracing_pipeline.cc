@@ -354,18 +354,19 @@ Result RayTracingPipeline::TraceRays(amber::SBT* rSBT,
       if (buffers[0] == VK_NULL_HANDLE) {
         return Result("Vulkan: NV ray tracing needs a ray generation table");
       }
+      BeginTimerQuery();
       device_->GetPtrs()->vkCmdTraceRaysNV(
           command_->GetVkCommandBuffer(), buffers[0], offsets[0], buffers[1],
           offsets[1], strides[1], buffers[2], offsets[2], strides[2],
           buffers[3], offsets[3], strides[3], x, y, z);
     } else {
+      BeginTimerQuery();
       device_->GetPtrs()->vkCmdTraceRaysKHR(command_->GetVkCommandBuffer(),
                                             &rSBTRegion, &mSBTRegion,
                                             &hSBTRegion, &cSBTRegion, x, y, z);
     }
-    BeginTimerQuery();
-    r = guard.Submit(GetFenceTimeout(), GetPipelineRuntimeLayerEnabled());
     EndTimerQuery();
+    r = guard.Submit(GetFenceTimeout(), GetPipelineRuntimeLayerEnabled());
     if (!r.IsSuccess()) {
       return r;
     }
