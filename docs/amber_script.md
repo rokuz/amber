@@ -88,6 +88,8 @@ with:
  * `RayTracingMaintenance1FeaturesKHR.rayTracingPipelineTraceRaysIndirect2`
  * `RayTracingMotionBlurFeaturesNV.rayTracingMotionBlur`
  * `RayTracingMotionBlurFeaturesNV.rayTracingMotionBlurPipelineTraceRaysIndirect`
+ * `RayTracingInvocationReorderFeaturesEXT.rayTracingInvocationReorder`
+ * `RayTracingInvocationReorderFeaturesNV.rayTracingInvocationReorder`
  * `MeshShaderFeaturesEXT.taskShader`
  * `MeshShaderFeaturesEXT.meshShader`
  * `MeshShaderFeaturesEXT.multiviewMeshShader`

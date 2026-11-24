@@ -395,6 +395,25 @@ TEST_F(AmberScriptParserTest, DeviceFeatureMissingFeature) {
   EXPECT_EQ("1: missing feature name for DEVICE_FEATURE command", r.Error());
 }
 
+TEST_F(AmberScriptParserTest, DeviceFeatureInvocationReorder) {
+  std::string in = R"(
+DEVICE_FEATURE RayTracingInvocationReorderFeaturesEXT.rayTracingInvocationReorder
+DEVICE_FEATURE RayTracingInvocationReorderFeaturesNV.rayTracingInvocationReorder)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  ASSERT_TRUE(r.IsSuccess()) << r.Error();
+
+  auto script = parser.GetScript();
+  const auto& features = script->GetRequiredFeatures();
+  ASSERT_EQ(2U, features.size());
+  EXPECT_EQ(
+      "RayTracingInvocationReorderFeaturesEXT.rayTracingInvocationReorder",
+      features[0]);
+  EXPECT_EQ("RayTracingInvocationReorderFeaturesNV.rayTracingInvocationReorder",
+            features[1]);
+}
+
 TEST_F(AmberScriptParserTest, DeviceFeatureUnknown) {
   std::string in = "DEVICE_FEATURE unknown";
 

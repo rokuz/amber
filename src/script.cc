@@ -163,6 +163,12 @@ bool Script::IsKnownFeature(const std::string& name) const {
          name ==
              "RayTracingMotionBlurFeaturesNV."
              "rayTracingMotionBlurPipelineTraceRaysIndirect" ||
+         name ==
+             "RayTracingInvocationReorderFeaturesEXT."
+             "rayTracingInvocationReorder" ||
+         name ==
+             "RayTracingInvocationReorderFeaturesNV."
+             "rayTracingInvocationReorder" ||
          name == "MeshShaderFeaturesEXT.taskShader" ||
          name == "MeshShaderFeaturesEXT.meshShader" ||
          name == "MeshShaderFeaturesEXT.multiviewMeshShader" ||
